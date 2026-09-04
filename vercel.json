@@ -1,8 +1,7 @@
 {
   "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/api/index"
-    }
+    { "source": "/", "destination": "/landing.html" },
+    { "source": "/arena", "destination": "/index.html" },
+    { "source": "/(.*)", "destination": "/api/index" }
   ]
 }
