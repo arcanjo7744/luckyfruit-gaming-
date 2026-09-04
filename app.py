@@ -139,6 +139,28 @@ def omega_pay_request(path, payload):
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
+def restore_token_user(payload):
+    """Recria a conta na instância atual quando uma função serverless é iniciada.
+
+    O SQLite da Vercel fica em /tmp e uma função nova pode não carregar o
+    arquivo criado por outra função. Enquanto o banco PostgreSQL persistente
+    não está conectado, o próprio token assinado traz a identidade mínima
+    necessária para que um usuário recém-criado não receba "usuário não
+    encontrado" ao abrir a cobrança PIX.
+    """
+    required = ('user_id', 'username', 'email', 'password_hash')
+    if not all(payload.get(key) is not None for key in required):
+        return
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM users WHERE id = ?", (payload['user_id'],))
+        if not cursor.fetchone():
+            cursor.execute(
+                "INSERT OR IGNORE INTO users (id, username, email, password_hash, balance) VALUES (?, ?, ?, ?, ?)",
+                (payload['user_id'], payload['username'], payload['email'], payload['password_hash'], TEST_STARTING_CREDITS)
+            )
+            conn.commit()
+
 def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -152,6 +174,7 @@ def token_required(f):
         try:
             data = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
             current_user_id = data['user_id']
+            restore_token_user(data)
         except Exception:
             return jsonify({'message': 'Token inválido ou expirado!'}), 401
         return f(current_user_id, *args, **kwargs)
@@ -182,6 +205,9 @@ def register():
 
         token = jwt.encode({
             'user_id': user_id,
+            'username': username,
+            'email': email,
+            'password_hash': pwd_hash,
             'exp': datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=7)
         }, SECRET_KEY, algorithm="HS256")
 
@@ -213,6 +239,9 @@ def login():
 
     token = jwt.encode({
         'user_id': user['id'],
+        'username': user['username'],
+        'email': user['email'],
+        'password_hash': user['password_hash'],
         'exp': datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=7)
     }, SECRET_KEY, algorithm="HS256")
 
@@ -627,3 +656,4 @@ def serve_static(path):
 if __name__ == '__main__':
     print("Servidor LuckyFruit Gaming rodando na porta 3000 (http://localhost:3000)")
     app.run(host='0.0.0.0', port=3000, debug=True)
+
