@@ -8,11 +8,15 @@ import random
 import io
 import base64
 import qrcode
+import urllib.request
+import json
 from functools import wraps
-from flask import Flask, request, jsonify, send_from_directory, render_template
+from flask import Flask, request, jsonify, send_from_directory
 
 app = Flask(__name__, static_folder='public', static_url_path='')
-SECRET_KEY = "super_secret_igaming_key_change_in_production"
+SECRET_KEY = os.environ.get("JWT_SECRET", "super_secret_igaming_key_change_in_production")
+
+# Definir caminho do banco SQLite (Suporta ambiente Serverless da Vercel salvando em /tmp)
 if os.environ.get('VERCEL'):
     DB_PATH = '/tmp/database.db'
 else:
@@ -68,6 +72,7 @@ def init_db():
         ''')
         conn.commit()
 
+# Inicializa o banco no carregamento
 init_db()
 
 def hash_password(password):
@@ -198,18 +203,49 @@ def create_deposit(current_user_id):
     if amount < 5.0:
         return jsonify({'message': 'O valor mínimo para depósito via PIX é R$ 5,00.'}), 400
 
-    external_id = f"pix_{uuid.uuid4().hex[:12]}"
-    pix_copia_e_cola = f"00020126580014BR.GOV.BCB.PIX0136{uuid.uuid4()}5204000053039865405{amount:.2f}5802BR5916LUCKYFRUIT GAMING6009SAO PAULO62070503***6304ABCD"
-
-    # Gerar imagem QR Code em Base64
-    qr = qrcode.QRCode(version=1, box_size=6, border=2)
-    qr.add_data(pix_copia_e_cola)
-    qr.make(fit=True)
-    img = qr.make_image(fill_color="black", back_color="white")
+    mp_access_token = os.environ.get('MERCADOPAGO_ACCESS_TOKEN')
     
-    buffered = io.BytesIO()
-    img.save(buffered, format="PNG")
-    qr_code_base64 = "data:image/png;base64," + base64.b64encode(buffered.getvalue()).decode('utf-8')
+    # Se houver chave do Mercado Pago configurada nas variáveis de ambiente
+    if mp_access_token:
+        try:
+            mp_url = "https://api.mercadopago.com/v1/payments"
+            mp_data = {
+                "transaction_amount": amount,
+                "description": "Deposito LuckyFruit Gaming",
+                "payment_method_id": "pix",
+                "payer": { "email": "pagador@luckyfruitgaming.com" }
+            }
+            req = urllib.request.Request(
+                mp_url,
+                data=json.dumps(mp_data).encode('utf-8'),
+                headers={
+                    "Authorization": f"Bearer {mp_access_token}",
+                    "Content-Type": "application/json"
+                }
+            )
+            with urllib.request.urlopen(req) as response:
+                res_data = json.loads(response.read().decode())
+                pix_copia_e_cola = res_data['point_of_interaction']['transaction_data']['qr_code']
+                qr_code_base64 = "data:image/png;base64," + res_data['point_of_interaction']['transaction_data']['qr_code_base64']
+                external_id = str(res_data['id'])
+        except Exception as e:
+            print("Erro ao integrar com Mercado Pago:", e)
+            mp_access_token = None
+
+    # Fallback para o Motor de PIX Simulado de Produção/Teste
+    if not mp_access_token:
+        external_id = f"pix_{uuid.uuid4().hex[:12]}"
+        pix_copia_e_cola = f"00020126580014BR.GOV.BCB.PIX0136{uuid.uuid4()}5204000053039865405{amount:.2f}5802BR5916LUCKYFRUIT GAMING6009SAO PAULO62070503***6304ABCD"
+
+        # Gerar imagem QR Code em Base64
+        qr = qrcode.QRCode(version=1, box_size=6, border=2)
+        qr.add_data(pix_copia_e_cola)
+        qr.make(fit=True)
+        img = qr.make_image(fill_color="black", back_color="white")
+        
+        buffered = io.BytesIO()
+        img.save(buffered, format="PNG")
+        qr_code_base64 = "data:image/png;base64," + base64.b64encode(buffered.getvalue()).decode('utf-8')
 
     with get_db() as conn:
         cursor = conn.cursor()
@@ -254,7 +290,7 @@ def request_withdraw(current_user_id):
             return jsonify({'message': 'Saldo insuficiente para realizar este saque!'}), 400
 
         # Debitar valor e registrar saque
-        new_balance = user['balance'] - amount
+        new_balance = round(user['balance'] - amount, 2)
         cursor.execute("UPDATE users SET balance = ? WHERE id = ?", (new_balance, current_user_id))
         
         external_id = f"wdr_{uuid.uuid4().hex[:12]}"
@@ -286,8 +322,8 @@ def transaction_history(current_user_id):
 @app.route('/api/payments/webhook', methods=['POST'])
 def payment_webhook():
     data = request.get_json() or {}
-    external_id = data.get('external_id') or data.get('id')
-    status = data.get('status') # 'approved' ou 'completed'
+    external_id = data.get('external_id') or str(data.get('id', ''))
+    status = data.get('status') or data.get('action', '')
 
     if not external_id:
         return jsonify({'message': 'ID de transação não informado'}), 400
@@ -303,8 +339,7 @@ def payment_webhook():
         if tx['status'] == 'completed':
             return jsonify({'message': 'Transação já foi creditada'}), 200
 
-        if status in ['approved', 'completed', 'paid']:
-            # Credita o valor na conta do usuário
+        if status in ['approved', 'completed', 'paid', 'payment.updated']:
             cursor.execute("UPDATE users SET balance = balance + ? WHERE id = ?", (tx['amount'], tx['user_id']))
             cursor.execute("UPDATE transactions SET status = 'completed' WHERE id = ?", (tx['id'],))
             conn.commit()
@@ -343,15 +378,15 @@ def simulate_pay(current_user_id):
         'new_balance': new_balance
     })
 
-# ----------------- LÓGICA DO MINI-JOGO FRUIT SPIN -----------------
+# ----------------- LÓGICA DO MINI-JOGO LUCKYFRUIT SPIN -----------------
 
 FRUIT_SYMBOLS = [
-    {'name': 'Morango', 'icon': '🍓', 'multiplier': 5.0, 'weight': 10},
-    {'name': 'Melancia', 'icon': '🍉', 'multiplier': 3.0, 'weight': 15},
-    {'name': 'Uva', 'icon': '🍇', 'multiplier': 2.5, 'weight': 20},
-    {'name': 'Banana', 'icon': '🍌', 'multiplier': 2.0, 'weight': 25},
-    {'name': 'Laranja', 'icon': '🍊', 'multiplier': 1.5, 'weight': 30},
-    {'name': 'Limão', 'icon': '🍋', 'multiplier': 1.2, 'weight': 35},
+    {'name': 'Morango', 'icon': '🍓', 'multiplier': 10.0, 'weight': 10},
+    {'name': 'Melancia', 'icon': '🍉', 'multiplier': 6.0, 'weight': 15},
+    {'name': 'Uva', 'icon': '🍇', 'multiplier': 5.0, 'weight': 20},
+    {'name': 'Banana', 'icon': '🍌', 'multiplier': 4.0, 'weight': 25},
+    {'name': 'Laranja', 'icon': '🍊', 'multiplier': 3.0, 'weight': 30},
+    {'name': 'Limão', 'icon': '🍋', 'multiplier': 2.4, 'weight': 35},
 ]
 
 def pick_random_symbol():
@@ -400,12 +435,12 @@ def game_spin(current_user_id):
         if s1['icon'] == s2['icon'] == s3['icon']:
             # 3 iguais: Jackpot do Símbolo
             is_win = True
-            multiplier = s1['multiplier'] * 2.0
+            multiplier = s1['multiplier']
         elif s1['icon'] == s2['icon'] or s2['icon'] == s3['icon'] or s1['icon'] == s3['icon']:
             # 2 iguais: Prêmio Parcial
             matching_symbol = s1 if s1['icon'] == s2['icon'] or s1['icon'] == s3['icon'] else s2
             is_win = True
-            multiplier = matching_symbol['multiplier'] * 0.8
+            multiplier = round(matching_symbol['multiplier'] * 0.4, 2)
         
         if is_win:
             payout = round(bet_amount * multiplier, 2)
@@ -441,11 +476,18 @@ def recent_wins():
         wins = [dict(row) for row in cursor.fetchall()]
     return jsonify({'recent_wins': wins})
 
-# Servir a Aplicação Web Frontend
+# ----------------- SERVIR ARQUIVOS ESTÁTICOS NA VERCEL & LOCAL -----------------
+
 @app.route('/')
 def index():
     return send_from_directory('public', 'index.html')
 
+@app.route('/<path:path>')
+def serve_static(path):
+    if os.path.exists(os.path.join('public', path)):
+        return send_from_directory('public', path)
+    return send_from_directory('public', 'index.html')
+
 if __name__ == '__main__':
-    print("Servidor da Plataforma iGaming rodando na porta 3000 (http://localhost:3000)")
+    print("Servidor LuckyFruit Gaming rodando na porta 3000 (http://localhost:3000)")
     app.run(host='0.0.0.0', port=3000, debug=True)
