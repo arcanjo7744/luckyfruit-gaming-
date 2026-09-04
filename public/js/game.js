@@ -1,14 +1,33 @@
-// MOTOR GRÁFICO & FÍSICA DO JOGO FRUIT NINJA (CÁLCULO DE 2,5% DO VALOR APOSTADO POR FRUTA)
+// MOTOR GRÁFICO & FÍSICA DO JOGO FRUIT NINJA (DIFICULDADE A CADA FRUTA & GANHOS EXPONENCIAIS POR HABILIDADE)
 
 let gameState = 'IDLE'; // 'IDLE', 'PLAYING', 'GAMEOVER'
 let currentSessionId = null;
 let currentBetAmount = 25.0;
 let fruitsCutCount = 0;
+let missedFruitCount = 0;
 let currentMultiplier = 1.0;
 let currentWinAmount = 25.0;
 
 let currentLevel = 1;
 let levelUpNotice = null; // Banner flutuante no Canvas
+
+// Cinco faixas: o início é controlado, mas as sequências longas recompensam
+// precisão e reflexo. Cada faixa dura cinco frutas.
+const REWARD_RATES = [0.025, 0.040, 0.060, 0.085, 0.110];
+const FRUITS_PER_LEVEL = 5;
+const MIN_CASHOUT_MULTIPLIER = 4.0;
+
+function getRewardRate(fruitsCut) {
+    const tier = Math.min(
+        REWARD_RATES.length - 1,
+        Math.floor(Math.max(0, fruitsCut - 1) / FRUITS_PER_LEVEL)
+    );
+    return REWARD_RATES[tier];
+}
+
+function getLevelForFruitCount(fruitsCut) {
+    return Math.floor(Math.max(0, fruitsCut) / FRUITS_PER_LEVEL) + 1;
+}
 
 const canvas = document.getElementById('ninja-canvas');
 const ctx = canvas.getContext('2d');
@@ -41,8 +60,8 @@ function playTone(freq, duration, type = 'sine') {
 }
 
 function playSliceSound() {
-    playTone(600, 0.05, 'triangle');
-    setTimeout(() => playTone(1200, 0.04, 'sine'), 30);
+    playTone(650, 0.05, 'triangle');
+    setTimeout(() => playTone(1300, 0.04, 'sine'), 30);
 }
 
 function playLevelUpSound() {
@@ -79,6 +98,7 @@ function playCashoutSound() {
 let objects = [];
 let particles = [];
 let splatters = [];
+let floatingTexts = [];
 let bladeTrail = [];
 
 const FRUIT_TYPES = [
@@ -93,22 +113,22 @@ const FRUIT_TYPES = [
 ];
 
 class GameObject {
-    constructor(isBomb = false, level = 1) {
+    constructor(isBomb = false, fruitsCut = 0) {
         this.isBomb = isBomb;
         this.radius = isBomb ? 26 : 30;
         this.x = Math.random() * (canvas.width - 120) + 60;
         this.y = canvas.height + 40;
         
-        // Multiplicador de velocidade baseado no Nível Atual
-        const speedBoost = 1.0 + (level - 1) * 0.20; // +20% de velocidade por nível
+        // Cada corte aumenta a velocidade; sequências longas exigem reflexos reais.
+        const speedBoost = Math.min(2.45, 1.0 + (fruitsCut * 0.055));
         
-        const targetX = canvas.width / 2 + (Math.random() - 0.5) * 350;
+        const targetX = canvas.width / 2 + (Math.random() - 0.5) * 380;
         this.vx = ((targetX - this.x) / 42) * speedBoost;
         this.vy = -(Math.random() * 4.5 + 13.5) * speedBoost;
-        this.gravity = 0.36 * speedBoost;
+        this.gravity = 0.37 * speedBoost;
         
         this.rotation = Math.random() * Math.PI * 2;
-        this.vRot = (Math.random() - 0.5) * (0.15 * speedBoost);
+        this.vRot = (Math.random() - 0.5) * (0.16 * speedBoost);
         
         this.sliced = false;
         
@@ -134,8 +154,8 @@ class GameObject {
         ctx.translate(this.x, this.y);
         ctx.rotate(this.rotation);
         
-        ctx.shadowColor = this.isBomb ? 'rgba(239, 68, 68, 0.8)' : 'rgba(0, 0, 0, 0.4)';
-        ctx.shadowBlur = this.isBomb ? 18 : 8;
+        ctx.shadowColor = this.isBomb ? 'rgba(239, 68, 68, 0.9)' : 'rgba(0, 0, 0, 0.4)';
+        ctx.shadowBlur = this.isBomb ? 20 : 8;
 
         ctx.font = `${this.radius * 1.8}px serif`;
         ctx.textAlign = 'center';
@@ -194,6 +214,34 @@ class Splatter {
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
         ctx.fill();
+        ctx.restore();
+    }
+}
+
+// TEXTO FLUTUANTE DE GANHO (+3% / R$) NO CORTE
+class FloatingText {
+    constructor(x, y, text, color = '#A3E635') {
+        this.x = x;
+        this.y = y;
+        this.text = text;
+        this.color = color;
+        this.vy = -1.8;
+        this.alpha = 1.0;
+    }
+
+    update() {
+        this.y += this.vy;
+        this.alpha -= 0.022;
+    }
+
+    draw(ctx) {
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, this.alpha);
+        ctx.font = '900 16px Poppins, sans-serif';
+        ctx.fillStyle = this.color;
+        ctx.shadowColor = '#84CC16';
+        ctx.shadowBlur = 10;
+        ctx.fillText(this.text, this.x, this.y);
         ctx.restore();
     }
 }
@@ -258,33 +306,37 @@ function checkIntersections(x, y) {
             obj.sliced = true;
             
             if (obj.isBomb) {
-                // BOMBA CUT: EXPLOSÃO E FIM DE PARTIDA
+                // BOMBA CORRIDA: EXPLOSÃO E FIM DE PARTIDA
                 playBombExplodeSound();
                 createExplosion(obj.x, obj.y);
                 triggerGameOver();
             } else {
-                // FRUTA FATIADA: CÁLCULO EXATO DE 2,5% DA APOSTA POR FRUTA
+                // FRUTA FATIADA
                 playSliceSound();
                 fruitsCutCount++;
 
-                // Taxa Base: 2,5% (0.025x) no Nível 1, aumentando +0,5% por Nível (+0.005x)
-                const percentPerFruit = 0.025 + (currentLevel - 1) * 0.005;
-                currentMultiplier = roundVal(currentMultiplier + percentPerFruit, 4);
+                // Recompensa progressiva: +2,5%, +4%, +6%, +8,5% e +11% por fruta.
+                // Os maiores valores só chegam nas faixas de risco mais alto.
+                const percentGain = getRewardRate(fruitsCutCount);
                 
-                // O ganho financeiro é 2,5% do valor da aposta por fruta cortada
+                currentMultiplier = roundVal(currentMultiplier + percentGain, 4);
                 currentWinAmount = roundVal(currentBetAmount * currentMultiplier, 2);
+
+                const singleFruitMoney = roundVal(currentBetAmount * percentGain, 2);
                 
-                // VERIFICAR AUMENTO DE NÍVEL (A CADA 6 FRUTAS)
-                const newLevel = Math.floor(fruitsCutCount / 6) + 1;
+                // Exibir valor de ganho chamativo flutuante no corte
+                floatingTexts.push(new FloatingText(obj.x, obj.y, `+${(percentGain * 100).toFixed(1)}% (+R$ ${singleFruitMoney.toFixed(2)})`));
+
+                // CHECAR SUBIDA DE NÍVEL (A CADA 5 FRUTAS)
+                const newLevel = getLevelForFruitCount(fruitsCutCount);
                 if (newLevel > currentLevel) {
                     currentLevel = newLevel;
                     playLevelUpSound();
                     levelUpNotice = {
-                        text: `⚡ NÍVEL ${currentLevel}! VELOCIDADE +20% | TAXA +${((0.025 + (currentLevel - 1) * 0.005)*100).toFixed(1)}%/FRUTA!`,
-                        alpha: 1.0,
-                        scale: 1.4
+                        text: `🔥 NÍVEL ${currentLevel}! MAIS VELOCIDADE | +${(getRewardRate(fruitsCutCount) * 100).toFixed(1)}%/FRUTA!`,
+                        alpha: 1.0
                     };
-                    showToast(`🔥 Nível ${currentLevel}! A cada fruta você ganha ${((0.025 + (currentLevel - 1) * 0.005)*100).toFixed(1)}% da aposta!`, 'warning');
+                    showToast(`⚡ Nível ${currentLevel}! Frutas mais rápidas e com maiores recompensas!`, 'warning');
                 }
 
                 updateHUD();
@@ -325,25 +377,27 @@ function gameLoop(timestamp) {
     // Desenhar fundo de respingos
     splatters.forEach(s => s.draw(ctx));
 
-    // Spawning Dinâmico com Dificuldade RAMP-UP por Nível
+    // Spawning Dinâmico com Dificuldade RAMP-UP por Fruta Cortada
     if (gameState === 'PLAYING') {
-        const spawnInterval = Math.max(520, 1150 - (currentLevel - 1) * 140);
+        // Menos tempo para reagir a cada fruta: não há ganho fácil em streaks altos.
+        const spawnInterval = Math.max(330, 1150 - fruitsCutCount * 30);
 
         if (timestamp - lastSpawnTime > spawnInterval) {
             lastSpawnTime = timestamp;
             
-            const spawnCount = currentLevel >= 3 ? (Math.random() < 0.6 ? 2 : 3) : (Math.random() < 0.5 ? 1 : 2);
-            const bombChance = Math.min(0.50, 0.22 + (currentLevel - 1) * 0.07);
+            const spawnCount = fruitsCutCount > 10 ? (Math.random() < 0.60 ? 3 : 2) : (Math.random() < 0.55 ? 1 : 2);
+            // Bombas e combos surgem com mais frequência conforme o prêmio aumenta.
+            const bombChance = Math.min(0.62, 0.16 + fruitsCutCount * 0.021);
 
             for (let i = 0; i < spawnCount; i++) {
                 const isBomb = Math.random() < bombChance;
-                objects.push(new GameObject(isBomb, currentLevel));
+                objects.push(new GameObject(isBomb, fruitsCutCount));
             }
         }
     } else if (gameState === 'IDLE') {
         if (timestamp - lastSpawnTime > 2500) {
             lastSpawnTime = timestamp;
-            objects.push(new GameObject(false, 1));
+            objects.push(new GameObject(false, 0));
         }
     }
 
@@ -353,6 +407,17 @@ function gameLoop(timestamp) {
         obj.update();
         obj.draw(ctx);
         if (obj.y > canvas.height + 60) {
+            // Frutas ignoradas também exigem atenção: cinco escapes encerram a rodada.
+            if (gameState === 'PLAYING' && !obj.isBomb && !obj.sliced) {
+                missedFruitCount++;
+                updateHUD();
+
+                if (missedFruitCount >= 5) {
+                    objects.splice(i, 1);
+                    triggerGameOver('missed');
+                    break;
+                }
+            }
             objects.splice(i, 1);
         }
     }
@@ -363,6 +428,14 @@ function gameLoop(timestamp) {
         p.update();
         p.draw(ctx);
         if (p.alpha <= 0) particles.splice(i, 1);
+    }
+
+    // Atualizar e desenhar textos flutuantes (+3.0%)
+    for (let i = floatingTexts.length - 1; i >= 0; i--) {
+        const ft = floatingTexts[i];
+        ft.update();
+        ft.draw(ctx);
+        if (ft.alpha <= 0) floatingTexts.splice(i, 1);
     }
 
     // Rastro de Lâmina Neon
@@ -389,7 +462,7 @@ function gameLoop(timestamp) {
     if (levelUpNotice) {
         ctx.save();
         ctx.globalAlpha = Math.max(0, levelUpNotice.alpha);
-        ctx.font = '900 18px Poppins, sans-serif';
+        ctx.font = '900 17px Poppins, sans-serif';
         ctx.textAlign = 'center';
         ctx.fillStyle = '#A3E635';
         ctx.shadowColor = '#84CC16';
@@ -416,17 +489,24 @@ function setBet(amount) {
 }
 
 function updateHUD() {
-    document.getElementById('hud-fruits-cut').innerText = `🍓 ${fruitsCutCount}`;
+    document.getElementById('hud-fruits-cut').innerText = `🍓 ${fruitsCutCount} Frutas`;
+    document.getElementById('hud-missed').innerText = `⚠️ ${missedFruitCount}/5 perdidas`;
     document.getElementById('hud-multiplier').innerText = `${currentMultiplier.toFixed(2)}x`;
     document.getElementById('hud-level').innerText = `⚡ NÍVEL ${currentLevel}`;
     
-    // Cálculo: Cada fruta dá 2,5% da aposta no nível 1
-    const gainPerFruit = (currentBetAmount * (0.025 + (currentLevel - 1) * 0.005));
-    document.getElementById('hud-fruit-rate').innerText = `+R$ ${gainPerFruit.toFixed(2)}/fruta (2,5%)`;
+    const percentGain = getRewardRate(Math.max(1, fruitsCutCount));
+    const gainPerFruit = (currentBetAmount * percentGain);
+
+    document.getElementById('hud-fruit-rate').innerText = `+R$ ${gainPerFruit.toFixed(2)}/fruta (+${(percentGain * 100).toFixed(1)}%)`;
 
     const formattedWin = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(currentWinAmount);
     document.getElementById('hud-current-win').innerText = formattedWin;
-    document.getElementById('cashout-btn-amount').innerText = formattedWin;
+    const cashoutButton = document.getElementById('cashout-btn');
+    const canCashout = gameState === 'PLAYING' && currentMultiplier >= MIN_CASHOUT_MULTIPLIER;
+    cashoutButton.disabled = !canCashout;
+    document.getElementById('cashout-btn-amount').innerText = canCashout
+        ? `(${formattedWin} • LIBERADO!)`
+        : `(bloqueado até ${MIN_CASHOUT_MULTIPLIER.toFixed(2)}x)`;
 }
 
 async function startNinjaGame() {
@@ -463,12 +543,14 @@ async function startNinjaGame() {
             // Reiniciar variáveis de rodada e Nível
             gameState = 'PLAYING';
             fruitsCutCount = 0;
+            missedFruitCount = 0;
             currentLevel = 1;
             levelUpNotice = null;
             currentMultiplier = 1.0;
             currentWinAmount = currentBetAmount;
             objects = [];
             splatters = [];
+            floatingTexts = [];
 
             updateHUD();
 
@@ -477,7 +559,7 @@ async function startNinjaGame() {
             document.getElementById('start-btn').classList.add('hidden');
             document.getElementById('cashout-btn').classList.remove('hidden');
 
-            showToast(`🎮 Partida iniciada com Aposta de R$ ${currentBetAmount.toFixed(2)}! 2,5% por fruta!`, 'info');
+        showToast(`🎮 Partida iniciada com Aposta de R$ ${currentBetAmount.toFixed(2)}! Mostre sua habilidade!`, 'info');
         } else {
             showToast(data.message, 'error');
             if (data.message.includes('insuficiente')) openModal('deposit-modal');
@@ -489,6 +571,10 @@ async function startNinjaGame() {
 
 async function cashoutNinjaGame() {
     if (gameState !== 'PLAYING' || !currentSessionId) return;
+    if (currentMultiplier < MIN_CASHOUT_MULTIPLIER) {
+        showToast(`🔒 Cash Out liberado somente em ${MIN_CASHOUT_MULTIPLIER.toFixed(2)}x. Continue cortando com precisão!`, 'warning');
+        return;
+    }
 
     try {
         const res = await fetch('/api/game/ninja/cashout', {
@@ -513,13 +599,13 @@ async function cashoutNinjaGame() {
 
             const overlay = document.getElementById('ninja-overlay');
             document.getElementById('overlay-title').innerText = '🎉 CASH OUT REALIZADO!';
-            document.getElementById('overlay-subtitle').innerText = `Você fatiou ${fruitsCutCount} frutas no Nível ${currentLevel} e faturou R$ ${data.payout.toFixed(2)} (${data.multiplier.toFixed(2)}x)!`;
+            document.getElementById('overlay-subtitle').innerText = `Incrível! Você fatiou ${fruitsCutCount} frutas no Nível ${currentLevel} e faturou R$ ${data.payout.toFixed(2)} (${data.multiplier.toFixed(2)}x)!`;
             overlay.classList.remove('hidden');
 
             document.getElementById('start-btn').classList.remove('hidden');
             document.getElementById('cashout-btn').classList.add('hidden');
 
-            showToast(`🏆 Vitória! R$ ${data.payout.toFixed(2)} creditados!`, 'success');
+            showToast(`🏆 Vitória Extraordinária! R$ ${data.payout.toFixed(2)} creditados!`, 'success');
             loadLiveWins();
         } else {
             showToast(data.message, 'error');
@@ -529,7 +615,7 @@ async function cashoutNinjaGame() {
     }
 }
 
-async function triggerGameOver() {
+async function triggerGameOver(reason = 'bomb') {
     if (gameState !== 'PLAYING') return;
     gameState = 'GAMEOVER';
 
@@ -553,12 +639,16 @@ async function triggerGameOver() {
     } catch (e) {}
 
     const overlay = document.getElementById('ninja-overlay');
-    document.getElementById('overlay-title').innerText = '💥 BOOM! BOMBA FATIADA!';
-    document.getElementById('overlay-subtitle').innerText = `Você acertou uma bomba no Nível ${currentLevel}! Aposta de R$ ${currentBetAmount.toFixed(2)} perdida. Tente novamente!`;
+    const missedTooManyFruits = reason === 'missed';
+    document.getElementById('overlay-title').innerText = missedTooManyFruits ? '⌛ 5 FRUTAS ESCAPARAM!' : '💥 BOOM! BOMBA FATIADA!';
+    document.getElementById('overlay-subtitle').innerText = missedTooManyFruits
+        ? `Você deixou 5 frutas passarem no Nível ${currentLevel}. Aposta de R$ ${currentBetAmount.toFixed(2)} perdida. Mantenha a precisão e tente novamente!`
+        : `Você acertou uma bomba no Nível ${currentLevel}! Aposta de R$ ${currentBetAmount.toFixed(2)} perdida. Treine seus reflexos e tente novamente!`;
     overlay.classList.remove('hidden');
 
     document.getElementById('start-btn').classList.remove('hidden');
     document.getElementById('cashout-btn').classList.add('hidden');
 
-    showToast('💣 Você cortou uma bomba! Fim de jogo.', 'error');
+    showToast(missedTooManyFruits ? '⌛ Cinco frutas escaparam! Fim de jogo.' : '💣 Você cortou uma bomba! Fim de jogo.', 'error');
 }
+
