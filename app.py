@@ -13,14 +13,17 @@ import json
 from functools import wraps
 from flask import Flask, request, jsonify, send_from_directory
 
-app = Flask(__name__, static_folder='public', static_url_path='')
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+PUBLIC_DIR = os.path.join(BASE_DIR, 'public')
+
+app = Flask(__name__, static_folder=PUBLIC_DIR, static_url_path='')
 SECRET_KEY = os.environ.get("JWT_SECRET", "super_secret_igaming_key_change_in_production")
 
 # Definir caminho do banco SQLite (Suporta ambiente Serverless da Vercel salvando em /tmp)
 if os.environ.get('VERCEL'):
     DB_PATH = '/tmp/database.db'
 else:
-    DB_PATH = os.path.join(os.path.dirname(__file__), 'database.db')
+    DB_PATH = os.path.join(BASE_DIR, 'database.db')
 
 def get_db():
     conn = sqlite3.connect(DB_PATH)
@@ -480,13 +483,14 @@ def recent_wins():
 
 @app.route('/')
 def index():
-    return send_from_directory('public', 'index.html')
+    return send_from_directory(PUBLIC_DIR, 'index.html')
 
 @app.route('/<path:path>')
 def serve_static(path):
-    if os.path.exists(os.path.join('public', path)):
-        return send_from_directory('public', path)
-    return send_from_directory('public', 'index.html')
+    target_path = os.path.join(PUBLIC_DIR, path)
+    if os.path.exists(target_path):
+        return send_from_directory(PUBLIC_DIR, path)
+    return send_from_directory(PUBLIC_DIR, 'index.html')
 
 if __name__ == '__main__':
     print("Servidor LuckyFruit Gaming rodando na porta 3000 (http://localhost:3000)")
