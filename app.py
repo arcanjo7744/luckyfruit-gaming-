@@ -44,6 +44,13 @@ def init_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
+        # Controle de rollover do bônus de depósito. ALTER é necessário para
+        # instalações que já possuem a tabela users criada.
+        user_columns = {row['name'] for row in cursor.execute("PRAGMA table_info(users)")}
+        if 'rollover_required' not in user_columns:
+            cursor.execute("ALTER TABLE users ADD COLUMN rollover_required REAL DEFAULT 0")
+        if 'rollover_wagered' not in user_columns:
+            cursor.execute("ALTER TABLE users ADD COLUMN rollover_wagered REAL DEFAULT 0")
         # Tabela de Transações (Depósitos e Saques)
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS transactions (
@@ -80,6 +87,10 @@ init_db()
 
 # Sessões ativas de partidas do Fruit Ninja
 ACTIVE_SESSIONS = {}
+TEST_MODE = False
+TEST_STARTING_CREDITS = 100.0
+DEPOSIT_BONUS_RATE = 1.0
+BONUS_ROLLOVER_MULTIPLIER = 5
 
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
@@ -120,7 +131,7 @@ def register():
             cursor = conn.cursor()
             cursor.execute(
                 "INSERT INTO users (username, email, password_hash, balance) VALUES (?, ?, ?, ?)",
-                (username, email, pwd_hash, 100.0) # Bônus inicial de R$ 100 para testes
+                (username, email, pwd_hash, TEST_STARTING_CREDITS)
             )
             conn.commit()
             user_id = cursor.lastrowid
@@ -131,9 +142,9 @@ def register():
         }, SECRET_KEY, algorithm="HS256")
 
         return jsonify({
-            'message': 'Conta criada com sucesso! Bônus de R$ 100,00 concedido.',
+            'message': 'Conta criada com sucesso! Bônus inicial de R$ 100,00 concedido.',
             'token': token,
-            'user': {'id': user_id, 'username': username, 'email': email, 'balance': 100.0}
+            'user': {'id': user_id, 'username': username, 'email': email, 'balance': TEST_STARTING_CREDITS}
         }), 201
     except sqlite3.IntegrityError:
         return jsonify({'message': 'Usuário ou e-mail já cadastrado!'}), 400
@@ -177,7 +188,7 @@ def login():
 def get_current_user(current_user_id):
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT id, username, email, balance FROM users WHERE id = ?", (current_user_id,))
+        cursor.execute("SELECT id, username, email, balance, rollover_required, rollover_wagered FROM users WHERE id = ?", (current_user_id,))
         user = cursor.fetchone()
 
     if not user:
@@ -192,14 +203,21 @@ def get_current_user(current_user_id):
 def get_balance(current_user_id):
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT balance FROM users WHERE id = ?", (current_user_id,))
+        cursor.execute("SELECT balance, rollover_required, rollover_wagered FROM users WHERE id = ?", (current_user_id,))
         user = cursor.fetchone()
 
-    return jsonify({'balance': user['balance'] if user else 0.0})
+    if not user:
+        return jsonify({'balance': 0.0, 'rollover_remaining': 0.0})
+    return jsonify({
+        'balance': user['balance'],
+        'rollover_remaining': round(max(0, user['rollover_required'] - user['rollover_wagered']), 2)
+    })
 
 @app.route('/api/wallet/deposit', methods=['POST'])
 @token_required
 def create_deposit(current_user_id):
+    if TEST_MODE:
+        return jsonify({'message': 'Depósitos estão desativados: esta é uma versão de teste com créditos fictícios.'}), 403
     data = request.get_json() or {}
     try:
         amount = float(data.get('amount', 0))
@@ -263,7 +281,7 @@ def create_deposit(current_user_id):
         tx_id = cursor.lastrowid
 
     return jsonify({
-        'message': 'Cobrança PIX gerada com sucesso!',
+        'message': f'Cobrança PIX gerada! Você receberá 100% de bônus e terá rollover de {BONUS_ROLLOVER_MULTIPLIER}x sobre o bônus.',
         'transaction_id': tx_id,
         'external_id': external_id,
         'amount': amount,
@@ -274,6 +292,8 @@ def create_deposit(current_user_id):
 @app.route('/api/wallet/withdraw', methods=['POST'])
 @token_required
 def request_withdraw(current_user_id):
+    if TEST_MODE:
+        return jsonify({'message': 'Saques estão desativados: créditos de teste não possuem valor monetário.'}), 403
     data = request.get_json() or {}
     try:
         amount = float(data.get('amount', 0))
@@ -284,15 +304,22 @@ def request_withdraw(current_user_id):
     if not pix_key:
         return jsonify({'message': 'Informe uma chave PIX válida!'}), 400
 
-    if amount < 20.0:
-        return jsonify({'message': 'O valor mínimo para saque é R$ 20,00.'}), 400
+    if amount < 150.0:
+        return jsonify({'message': 'O valor mínimo para saque é R$ 150,00.'}), 400
 
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT balance FROM users WHERE id = ?", (current_user_id,))
+        cursor.execute("SELECT balance, rollover_required, rollover_wagered FROM users WHERE id = ?", (current_user_id,))
         user = cursor.fetchone()
 
-        if not user or user['balance'] < amount:
+        if not user:
+            return jsonify({'message': 'Usuário não encontrado!'}), 404
+
+        rollover_remaining = round(max(0, user['rollover_required'] - user['rollover_wagered']), 2)
+        if rollover_remaining > 0:
+            return jsonify({'message': f'Complete o rollover do bônus antes de sacar. Falta apostar R$ {rollover_remaining:.2f}.'}), 400
+
+        if user['balance'] < amount:
             return jsonify({'message': 'Saldo insuficiente para realizar este saque!'}), 400
 
         # Debitar valor e registrar saque
@@ -346,10 +373,12 @@ def payment_webhook():
             return jsonify({'message': 'Transação já foi creditada'}), 200
 
         if status in ['approved', 'completed', 'paid', 'payment.updated']:
-            cursor.execute("UPDATE users SET balance = balance + ? WHERE id = ?", (tx['amount'], tx['user_id']))
+            bonus = round(tx['amount'] * DEPOSIT_BONUS_RATE, 2)
+            rollover = round(bonus * BONUS_ROLLOVER_MULTIPLIER, 2)
+            cursor.execute("UPDATE users SET balance = balance + ?, rollover_required = rollover_required + ? WHERE id = ?", (tx['amount'] + bonus, rollover, tx['user_id']))
             cursor.execute("UPDATE transactions SET status = 'completed' WHERE id = ?", (tx['id'],))
             conn.commit()
-            return jsonify({'message': 'Pagamento aprovado e saldo creditado com sucesso!'}), 200
+            return jsonify({'message': f'Pagamento aprovado: R$ {tx["amount"]:.2f} + R$ {bonus:.2f} de bônus creditados. Rollover: R$ {rollover:.2f}.'}), 200
 
     return jsonify({'message': 'Webhook recebido'}), 200
 
@@ -371,20 +400,41 @@ def simulate_pay(current_user_id):
         if tx['status'] == 'completed':
             return jsonify({'message': 'Este PIX já foi pago anteriormente.'}), 400
 
-        # Creditar saldo
-        cursor.execute("UPDATE users SET balance = balance + ? WHERE id = ?", (tx['amount'], current_user_id))
+        # Creditar depósito + bônus de 100% e registrar rollover do bônus.
+        bonus = round(tx['amount'] * DEPOSIT_BONUS_RATE, 2)
+        rollover = round(bonus * BONUS_ROLLOVER_MULTIPLIER, 2)
+        cursor.execute("UPDATE users SET balance = balance + ?, rollover_required = rollover_required + ? WHERE id = ?", (tx['amount'] + bonus, rollover, current_user_id))
         cursor.execute("UPDATE transactions SET status = 'completed' WHERE id = ?", (tx['id'],))
         
         cursor.execute("SELECT balance FROM users WHERE id = ?", (current_user_id,))
         new_balance = cursor.fetchone()['balance']
         conn.commit()
 
-    return jsonify({
-        'message': f'Pagamento PIX de R$ {tx["amount"]:.2f} confirmado! Saldo adicionado com sucesso.',
-        'new_balance': new_balance
-    })
+        return jsonify({
+            'message': f'PIX de R$ {tx["amount"]:.2f} confirmado + R$ {bonus:.2f} de bônus! Rollover pendente: R$ {rollover:.2f}.',
+            'new_balance': new_balance,
+            'bonus': bonus,
+            'rollover_remaining': rollover
+        })
 
 # ----------------- MOTOR DO JOGO FRUIT NINJA APOSTAS -----------------
+
+NINJA_REWARD_RATES = (0.025, 0.040, 0.060, 0.085, 0.110)
+NINJA_FRUITS_PER_LEVEL = 5
+NINJA_MAX_FRUITS = 40
+NINJA_MIN_CASHOUT_MULTIPLIER = 4.0
+
+
+def ninja_expected_multiplier(fruits_cut):
+    """Calcula a escada de recompensa usada pelo cliente e validada no cash out."""
+    if fruits_cut < 1 or fruits_cut > NINJA_MAX_FRUITS:
+        raise ValueError('Quantidade de frutas fora do limite permitido.')
+
+    multiplier = 1.0
+    for fruit_number in range(1, fruits_cut + 1):
+        tier = min((fruit_number - 1) // NINJA_FRUITS_PER_LEVEL, len(NINJA_REWARD_RATES) - 1)
+        multiplier += NINJA_REWARD_RATES[tier]
+    return round(multiplier, 4)
 
 @app.route('/api/game/ninja/start', methods=['POST'])
 @token_required
@@ -408,7 +458,10 @@ def ninja_start(current_user_id):
 
         # Debitar o valor da aposta
         new_balance = round(user['balance'] - bet_amount, 2)
-        cursor.execute("UPDATE users SET balance = ? WHERE id = ?", (new_balance, current_user_id))
+        cursor.execute(
+            "UPDATE users SET balance = ?, rollover_wagered = MIN(rollover_required, rollover_wagered + ?) WHERE id = ?",
+            (new_balance, bet_amount, current_user_id)
+        )
         conn.commit()
 
         session_id = uuid.uuid4().hex
@@ -438,9 +491,23 @@ def ninja_cashout(current_user_id):
     except (ValueError, TypeError):
         return jsonify({'message': 'Dados de partida inválidos!'}), 400
 
-    session = ACTIVE_SESSIONS.pop(session_id, None)
+    session = ACTIVE_SESSIONS.get(session_id)
     if not session or session['user_id'] != current_user_id:
         return jsonify({'message': 'Sessão de jogo expirada ou inválida!'}), 400
+
+    if not hit_bomb:
+        try:
+            expected_multiplier = ninja_expected_multiplier(fruits_cut)
+        except ValueError as error:
+            return jsonify({'message': str(error)}), 400
+
+        if abs(multiplier - expected_multiplier) > 0.0001:
+            return jsonify({'message': 'Multiplicador inválido para a sequência informada.'}), 400
+
+        if expected_multiplier < NINJA_MIN_CASHOUT_MULTIPLIER:
+            return jsonify({'message': 'O Cash Out só é liberado ao atingir 4,00x da aposta.'}), 400
+
+    ACTIVE_SESSIONS.pop(session_id, None)
 
     bet_amount = session['bet_amount']
     payout = 0.0
@@ -499,3 +566,4 @@ def serve_static(path):
 if __name__ == '__main__':
     print("Servidor LuckyFruit Gaming rodando na porta 3000 (http://localhost:3000)")
     app.run(host='0.0.0.0', port=3000, debug=True)
+
