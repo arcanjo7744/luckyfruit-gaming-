@@ -319,6 +319,9 @@ def create_deposit(current_user_id):
 def request_withdraw(current_user_id):
     if TEST_MODE:
         return jsonify({'message': 'Saques estão desativados: créditos de teste não possuem valor monetário.'}), 403
+    return jsonify({
+        'message': 'Saques estão temporariamente em revisão. A rota oficial de transferências da Omega Pay ainda precisa ser configurada antes de enviar PIX reais.'
+    }), 503
     data = request.get_json() or {}
     try:
         amount = float(data.get('amount', 0))
