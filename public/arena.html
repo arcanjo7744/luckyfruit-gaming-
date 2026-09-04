@@ -36,17 +36,17 @@
     <header class="site-header sticky top-0 z-40 px-4 py-3">
         <div class="max-w-7xl mx-auto flex items-center justify-between">
             <!-- LOGO -->
-            <div class="flex items-center gap-3 cursor-pointer" onclick="window.location.reload()">
-                <div class="brand-mark w-11 h-11 rounded-2xl flex items-center justify-center text-2xl">
-                    🥷
+            <a class="flex items-center gap-3 cursor-pointer" href="/" aria-label="LuckyNinja início">
+                <div class="brand-mark w-11 h-11 rounded-2xl flex items-center justify-center">
+                    <img src="/assets/luckyninja-mark.svg" alt="Símbolo LuckyNinja" class="w-11 h-11">
                 </div>
                 <div>
-                    <h1 class="text-xl font-black tracking-wider text-white">
-                        LUCKY<span class="text-lime-400">NINJA</span>
+                    <h1 class="brand-wordmark text-xl font-black tracking-wider text-white">
+                        LUCKY<span>NINJA</span>
                     </h1>
-                    <p class="text-[10px] text-purple-300/80 font-bold tracking-widest uppercase">Fruit Slash Betting</p>
+                    <p class="brand-tagline text-[10px] font-bold tracking-widest uppercase">Arena de reflexos</p>
                 </div>
-            </div>
+            </a>
 
             <!-- CONTROLES DO USUÁRIO -->
             <div class="flex items-center gap-3">
@@ -318,12 +318,8 @@
                     </button>
                 </div>
                 
-                <!-- BOTÃO DE SIMULAÇÃO DE PAGAMENTO PARA TESTE -->
                 <div class="bg-purple-950/60 border border-lime-400/40 p-3 rounded-xl w-full">
-                    <p class="text-[11px] text-lime-300 font-medium mb-2">Modo de Teste: Simular aprovação instantânea do PIX</p>
-                    <button onclick="simulatePixPayment()" class="w-full bg-lime-400 hover:bg-lime-300 text-slate-950 font-black text-xs py-2 rounded-lg transition shadow">
-                        Simular Pagamento Efetuado
-                    </button>
+                    <p class="text-[11px] text-lime-300 font-medium">Após pagar, a confirmação é feita automaticamente pela Omega Pay. Mantenha esta tela aberta por alguns instantes.</p>
                 </div>
             </div>
         </div>
