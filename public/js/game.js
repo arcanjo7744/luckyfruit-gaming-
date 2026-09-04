@@ -1,4 +1,4 @@
-// MOTOR GRÁFICO & FÍSICA DO JOGO FRUIT NINJA (HTML5 CANVAS)
+// MOTOR GRÁFICO & FÍSICA DO JOGO FRUIT NINJA (DIFICULDADE PROGRESSIVA POR NÍVEIS)
 
 let gameState = 'IDLE'; // 'IDLE', 'PLAYING', 'GAMEOVER'
 let currentSessionId = null;
@@ -6,6 +6,10 @@ let currentBetAmount = 5.0;
 let fruitsCutCount = 0;
 let currentMultiplier = 1.0;
 let currentWinAmount = 0.0;
+
+let currentLevel = 1;
+let lastLevelTriggered = 1;
+let levelUpNotice = null; // Banner flutuante no Canvas
 
 const canvas = document.getElementById('ninja-canvas');
 const ctx = canvas.getContext('2d');
@@ -42,6 +46,13 @@ function playSliceSound() {
     setTimeout(() => playTone(1200, 0.04, 'sine'), 30);
 }
 
+function playLevelUpSound() {
+    playTone(440, 0.1, 'sine');
+    setTimeout(() => playTone(554.37, 0.1, 'sine'), 80);
+    setTimeout(() => playTone(659.25, 0.1, 'sine'), 160);
+    setTimeout(() => playTone(880.00, 0.25, 'triangle'), 240);
+}
+
 function playBombExplodeSound() {
     try {
         if (audioCtx.state === 'suspended') audioCtx.resume();
@@ -72,31 +83,33 @@ let splatters = [];
 let bladeTrail = [];
 
 const FRUIT_TYPES = [
-    { name: 'Morango', icon: '🍓', color: '#EF4444', value: 0.15 },
-    { name: 'Melancia', icon: '🍉', color: '#10B981', value: 0.20 },
-    { name: 'Uva', icon: '🍇', color: '#8B5CF6', value: 0.15 },
-    { name: 'Banana', icon: '🍌', color: '#F59E0B', value: 0.12 },
-    { name: 'Laranja', icon: '🍊', color: '#F97316', value: 0.10 },
-    { name: 'Limão', icon: '🍋', color: '#84CC16', value: 0.10 },
-    { name: 'Abacaxi', icon: '🍍', color: '#EAB308', value: 0.25 },
-    { name: 'Coco', icon: '🥥', color: '#A1A1AA', value: 0.20 }
+    { name: 'Morango', icon: '🍓', color: '#EF4444', baseValue: 0.15 },
+    { name: 'Melancia', icon: '🍉', color: '#10B981', baseValue: 0.20 },
+    { name: 'Uva', icon: '🍇', color: '#8B5CF6', baseValue: 0.15 },
+    { name: 'Banana', icon: '🍌', color: '#F59E0B', baseValue: 0.12 },
+    { name: 'Laranja', icon: '🍊', color: '#F97316', baseValue: 0.10 },
+    { name: 'Limão', icon: '🍋', color: '#84CC16', baseValue: 0.10 },
+    { name: 'Abacaxi', icon: '🍍', color: '#EAB308', baseValue: 0.25 },
+    { name: 'Coco', icon: '🥥', color: '#A1A1AA', baseValue: 0.20 }
 ];
 
 class GameObject {
-    constructor(isBomb = false) {
+    constructor(isBomb = false, level = 1) {
         this.isBomb = isBomb;
         this.radius = isBomb ? 26 : 30;
         this.x = Math.random() * (canvas.width - 120) + 60;
         this.y = canvas.height + 40;
         
-        // Trajetória parabólica
-        const targetX = canvas.width / 2 + (Math.random() - 0.5) * 300;
-        this.vx = (targetX - this.x) / 45;
-        this.vy = -(Math.random() * 4 + 13);
-        this.gravity = 0.35;
+        // Multiplicador de velocidade baseado no Nível Atual
+        const speedBoost = 1.0 + (level - 1) * 0.20; // +20% de velocidade por nível
+        
+        const targetX = canvas.width / 2 + (Math.random() - 0.5) * 350;
+        this.vx = ((targetX - this.x) / 42) * speedBoost;
+        this.vy = -(Math.random() * 4.5 + 13.5) * speedBoost;
+        this.gravity = 0.36 * speedBoost;
         
         this.rotation = Math.random() * Math.PI * 2;
-        this.vRot = (Math.random() - 0.5) * 0.15;
+        this.vRot = (Math.random() - 0.5) * (0.15 * speedBoost);
         
         this.sliced = false;
         
@@ -104,7 +117,8 @@ class GameObject {
             const fruitData = FRUIT_TYPES[Math.floor(Math.random() * FRUIT_TYPES.length)];
             this.icon = fruitData.icon;
             this.color = fruitData.color;
-            this.value = fruitData.value;
+            // Bônus de bônus por fruta em níveis mais altos
+            this.value = roundVal(fruitData.baseValue + (level - 1) * 0.05, 2);
         } else {
             this.icon = '💣';
             this.color = '#EF4444';
@@ -124,8 +138,8 @@ class GameObject {
         ctx.rotate(this.rotation);
         
         // Desenhar sombra
-        ctx.shadowColor = this.isBomb ? 'rgba(239, 68, 68, 0.6)' : 'rgba(0, 0, 0, 0.4)';
-        ctx.shadowBlur = this.isBomb ? 15 : 8;
+        ctx.shadowColor = this.isBomb ? 'rgba(239, 68, 68, 0.8)' : 'rgba(0, 0, 0, 0.4)';
+        ctx.shadowBlur = this.isBomb ? 18 : 8;
 
         ctx.font = `${this.radius * 1.8}px serif`;
         ctx.textAlign = 'center';
@@ -188,7 +202,7 @@ class Splatter {
     }
 }
 
-// EVENTOS DE MOUSE E TOQUE (RASTRO DE LÂMINA)
+// CONTROLE DE MOUSE E TOQUE (RASTRO DE LÂMINA)
 let isSwiping = false;
 
 function addBladePoint(x, y) {
@@ -235,32 +249,43 @@ canvas.addEventListener('touchmove', (e) => {
 
 window.addEventListener('touchend', () => { isSwiping = false; });
 
-// DETECÇÃO DE COLISÃO DO CORTE DE LÂMINA
+// CHECAGEM DE COLISÃO DO CORTE
 function checkIntersections(x, y) {
     if (bladeTrail.length < 2) return;
-    const prev = bladeTrail[bladeTrail.length - 2];
 
     for (let i = objects.length - 1; i >= 0; i--) {
         const obj = objects[i];
         if (obj.sliced) continue;
 
-        // Distância do ponto ao objeto
         const dist = Math.hypot(obj.x - x, obj.y - y);
         if (dist < obj.radius + 15) {
             obj.sliced = true;
             
             if (obj.isBomb) {
-                // BOMBA CORRIDA: EXPLOSÃO E GAME OVER
+                // BOMBA CUT: EXPLOSÃO E FIM DE PARTIDA
                 playBombExplodeSound();
                 createExplosion(obj.x, obj.y);
                 triggerGameOver();
             } else {
-                // FRUTA FATIADA: INCREMENTA MULTIPLICADOR
+                // FRUTA FATIADA
                 playSliceSound();
                 fruitsCutCount++;
                 currentMultiplier = roundVal(currentMultiplier + obj.value, 2);
                 currentWinAmount = roundVal(currentBetAmount * currentMultiplier, 2);
                 
+                // VERIFICAR AUMENTO DE NÍVEL (A CADA 6 FRUTAS)
+                const newLevel = Math.floor(fruitsCutCount / 6) + 1;
+                if (newLevel > currentLevel) {
+                    currentLevel = newLevel;
+                    playLevelUpSound();
+                    levelUpNotice = {
+                        text: `⚡ NÍVEL ${currentLevel}! VELOCIDADE +20% | BÔNUS DE MULTIPLICADOR!`,
+                        alpha: 1.0,
+                        scale: 1.4
+                    };
+                    showToast(`🔥 Nível ${currentLevel}! A velocidade e quantidade de bombas aumentaram!`, 'warning');
+                }
+
                 updateHUD();
                 createJuiceSplatter(obj.x, obj.y, obj.color);
             }
@@ -299,21 +324,30 @@ function gameLoop(timestamp) {
     // Desenhar fundo de respingos
     splatters.forEach(s => s.draw(ctx));
 
-    // Spawning de Frutas e Bombas durante a partida
+    // Spawning Dinâmico com Dificuldade RAMP-UP por Nível
     if (gameState === 'PLAYING') {
-        if (timestamp - lastSpawnTime > 1100) {
+        // Intervalo de lançamento diminui conforme o nível (mínimo 500ms)
+        const spawnInterval = Math.max(520, 1150 - (currentLevel - 1) * 140);
+
+        if (timestamp - lastSpawnTime > spawnInterval) {
             lastSpawnTime = timestamp;
-            const spawnCount = Math.floor(Math.random() * 2) + 1;
+            
+            // Lançar mais objetos em níveis altos
+            const spawnCount = currentLevel >= 3 ? (Math.random() < 0.6 ? 2 : 3) : (Math.random() < 0.5 ? 1 : 2);
+            
+            // Probabilidade de bomba aumenta a cada nível (até 50%)
+            const bombChance = Math.min(0.50, 0.22 + (currentLevel - 1) * 0.07);
+
             for (let i = 0; i < spawnCount; i++) {
-                const isBomb = Math.random() < 0.28; // 28% de chance de bomba
-                objects.push(new GameObject(isBomb));
+                const isBomb = Math.random() < bombChance;
+                objects.push(new GameObject(isBomb, currentLevel));
             }
         }
     } else if (gameState === 'IDLE') {
-        // Modo Demo: Spawning lento apenas para efeito visual
+        // Modo Demo
         if (timestamp - lastSpawnTime > 2500) {
             lastSpawnTime = timestamp;
-            objects.push(new GameObject(false));
+            objects.push(new GameObject(false, 1));
         }
     }
 
@@ -335,7 +369,7 @@ function gameLoop(timestamp) {
         if (p.alpha <= 0) particles.splice(i, 1);
     }
 
-    // Desenhar rastro de lâmina neon
+    // Rastro de Lâmina Neon
     const now = Date.now();
     bladeTrail = bladeTrail.filter(p => now - p.time < 200);
 
@@ -350,9 +384,25 @@ function gameLoop(timestamp) {
         ctx.lineWidth = 6;
         ctx.lineCap = 'round';
         ctx.shadowColor = '#84CC16';
-        ctx.shadowBlur = 12;
+        ctx.shadowBlur = 14;
         ctx.stroke();
         ctx.restore();
+    }
+
+    // RENDERIZAR BANNER DE LEVEL UP FLUTUANTE
+    if (levelUpNotice) {
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, levelUpNotice.alpha);
+        ctx.font = '900 18px Poppins, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#A3E635';
+        ctx.shadowColor = '#84CC16';
+        ctx.shadowBlur = 15;
+        ctx.fillText(levelUpNotice.text, canvas.width / 2, 50);
+        ctx.restore();
+
+        levelUpNotice.alpha -= 0.012;
+        if (levelUpNotice.alpha <= 0) levelUpNotice = null;
     }
 
     requestAnimationFrame(gameLoop);
@@ -371,6 +421,7 @@ function setBet(amount) {
 function updateHUD() {
     document.getElementById('hud-fruits-cut').innerText = `🍓 ${fruitsCutCount}`;
     document.getElementById('hud-multiplier').innerText = `${currentMultiplier.toFixed(2)}x`;
+    document.getElementById('hud-level').innerText = `⚡ NÍVEL ${currentLevel}`;
     
     const formattedWin = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(currentWinAmount);
     document.getElementById('hud-current-win').innerText = formattedWin;
@@ -408,9 +459,11 @@ async function startNinjaGame() {
             currentSessionId = data.session_id;
             updateBalanceDisplay(data.new_balance);
 
-            // Reiniciar variáveis de rodada
+            // Reiniciar variáveis de rodada e Nível
             gameState = 'PLAYING';
             fruitsCutCount = 0;
+            currentLevel = 1;
+            levelUpNotice = null;
             currentMultiplier = 1.0;
             currentWinAmount = currentBetAmount;
             objects = [];
@@ -423,7 +476,7 @@ async function startNinjaGame() {
             document.getElementById('start-btn').classList.add('hidden');
             document.getElementById('cashout-btn').classList.remove('hidden');
 
-            showToast('🎮 Rodada Iniciada! Fatie as frutas!', 'info');
+            showToast('🎮 Partida iniciada no Nível 1! Fatie as frutas!', 'info');
         } else {
             showToast(data.message, 'error');
             if (data.message.includes('insuficiente')) openModal('deposit-modal');
@@ -459,7 +512,7 @@ async function cashoutNinjaGame() {
 
             const overlay = document.getElementById('ninja-overlay');
             document.getElementById('overlay-title').innerText = '🎉 CASH OUT REALIZADO!';
-            document.getElementById('overlay-subtitle').innerText = `Você fatiou ${fruitsCutCount} frutas e faturou R$ ${data.payout.toFixed(2)} (${data.multiplier.toFixed(2)}x)!`;
+            document.getElementById('overlay-subtitle').innerText = `Você fatiou ${fruitsCutCount} frutas (Alcançou o Nível ${currentLevel}) e faturou R$ ${data.payout.toFixed(2)} (${data.multiplier.toFixed(2)}x)!`;
             overlay.classList.remove('hidden');
 
             document.getElementById('start-btn').classList.remove('hidden');
@@ -500,7 +553,7 @@ async function triggerGameOver() {
 
     const overlay = document.getElementById('ninja-overlay');
     document.getElementById('overlay-title').innerText = '💥 BOOM! BOMBA FATIADA!';
-    document.getElementById('overlay-subtitle').innerText = `Você acertou uma bomba! Aposta de R$ ${currentBetAmount.toFixed(2)} perdida. Tente novamente!`;
+    document.getElementById('overlay-subtitle').innerText = `Você acertou uma bomba no Nível ${currentLevel}! Aposta de R$ ${currentBetAmount.toFixed(2)} perdida. Tente novamente!`;
     overlay.classList.remove('hidden');
 
     document.getElementById('start-btn').classList.remove('hidden');

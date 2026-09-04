@@ -102,10 +102,10 @@
             <!-- INSTRUÇÃO FRUIT NINJA -->
             <div class="bg-gradient-to-br from-purple-900/50 via-[#1D1138] to-lime-950/30 border border-lime-500/30 rounded-2xl p-4 shadow-xl relative overflow-hidden">
                 <div class="flex items-center gap-3 relative z-10">
-                    <span class="text-3xl">🔪</span>
+                    <span class="text-3xl">🥷</span>
                     <div>
-                        <h3 class="font-bold text-sm text-lime-300">Como Jogar Ninja:</h3>
-                        <p class="text-xs text-purple-200/80">Fatie as frutas voadoras com o mouse ou toque. Evite as **Bombas (💣)** e clique em **CASH OUT** para sacar!</p>
+                        <h3 class="font-bold text-sm text-lime-300">Dificuldade Nível Ramp-Up:</h3>
+                        <p class="text-xs text-purple-200/80">A cada 6 frutas fatiadas, o jogo **Sobe de Nível (⚡)**, aumentando a velocidade das frutas e a quantidade de **Bombas (💣)**!</p>
                     </div>
                 </div>
             </div>
@@ -132,11 +132,11 @@
                 <!-- EFEITO DE LUZ CYBER NEON DE FUNDO -->
                 <div class="absolute -top-24 left-1/2 -translate-x-1/2 w-96 h-96 bg-gradient-to-br from-lime-500/15 via-purple-600/20 to-transparent rounded-full blur-3xl pointer-events-none"></div>
 
-                <!-- HUD SUPERIOR DO JOGO (MULTIPLICADOR & LUCRO) -->
+                <!-- HUD SUPERIOR DO JOGO (MULTIPLICADOR, NÍVEL & LUCRO) -->
                 <div class="w-full max-w-2xl flex items-center justify-between bg-[#090514] border border-purple-900/80 rounded-2xl px-4 py-2.5 mb-3 z-10">
-                    <div class="flex items-center gap-2">
-                        <span class="text-xs text-purple-300">Frutas Fatiadas:</span>
-                        <span id="hud-fruits-cut" class="font-extrabold text-lime-400 text-sm md:text-base">🍓 0</span>
+                    <div class="flex flex-col">
+                        <span id="hud-level" class="text-[11px] font-black text-amber-400 uppercase tracking-wider">⚡ NÍVEL 1</span>
+                        <span id="hud-fruits-cut" class="font-extrabold text-lime-400 text-xs md:text-sm">🍓 0 Frutas</span>
                     </div>
                     <div class="text-center">
                         <span class="text-[10px] text-purple-300 uppercase tracking-widest block font-bold">Multiplicador</span>
@@ -156,7 +156,7 @@
                     <div id="ninja-overlay" class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center z-20 transition-all">
                         <span class="text-4xl mb-2">🥷🍓💣</span>
                         <h3 id="overlay-title" class="text-2xl md:text-3xl font-black text-lime-300">LUCKY FRUIT NINJA</h3>
-                        <p id="overlay-subtitle" class="text-xs text-purple-200 mt-1 max-w-md">Escolha o valor da sua aposta e clique em **INICIAR JOGO**. Fatie frutas para multiplicar seu dinheiro, mas cuidado com as bombas!</p>
+                        <p id="overlay-subtitle" class="text-xs text-purple-200 mt-1 max-w-md">Escolha a aposta e clique em **INICIAR JOGO**. A cada **6 frutas fatiadas**, a velocidade aumenta e surgem mais bombas!</p>
                     </div>
                 </div>
 
