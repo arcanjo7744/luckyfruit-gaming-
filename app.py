@@ -114,6 +114,7 @@ def omega_pay_request(path, payload):
         headers={
             'Content-Type': 'application/json',
             'Accept': 'application/json',
+            'User-Agent': 'LuckyNinja-Payments/1.0',
             'x-public-key': OMEGA_PAY_PUBLIC_KEY,
             'x-secret-key': OMEGA_PAY_SECRET_KEY,
         },
@@ -124,7 +125,14 @@ def omega_pay_request(path, payload):
             return json.loads(response.read().decode('utf-8'))
     except urllib.error.HTTPError as error:
         detail = error.read().decode('utf-8', errors='replace')
-        raise RuntimeError(f'Omega Pay respondeu {error.code}: {detail[:300]}') from error
+        if 'application/json' in (error.headers.get('Content-Type') or ''):
+            try:
+                gateway_message = json.loads(detail).get('message') or json.loads(detail).get('error')
+            except json.JSONDecodeError:
+                gateway_message = None
+            if gateway_message:
+                raise RuntimeError(f'Omega Pay respondeu {error.code}: {gateway_message}') from error
+        raise RuntimeError(f'Omega Pay bloqueou a solicitação ({error.code}).') from error
     except urllib.error.URLError as error:
         raise RuntimeError('Não foi possível conectar à Omega Pay.') from error
 
@@ -284,7 +292,7 @@ def create_deposit(current_user_id):
         omega_data = omega_pay_request('/gateway/pix/receive', omega_payload)
     except RuntimeError as error:
         print('Erro ao criar cobrança Omega Pay:', error)
-        return jsonify({'message': f'A Omega Pay recusou a cobrança: {str(error)}'}), 502
+        return jsonify({'message': 'Não foi possível gerar o PIX. Verifique a configuração da Omega Pay e tente novamente.'}), 502
 
     transaction_data = omega_data.get('transaction', omega_data)
     pix_data = transaction_data.get('pix') or omega_data.get('pix') or {}
