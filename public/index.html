@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LuckyFruit Gaming - Plataforma de Mini-Jogos & Apostas</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            lime: '#A3E635',
+                            cyber: '#581C87',
+                            dark: '#0B0716',
+                            card: '#160D29',
+                            accent: '#C084FC',
+                            glow: '#84CC16'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- FontAwesome & Google Fonts -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="bg-[#0B0716] text-slate-100 font-['Poppins'] min-h-screen flex flex-col antialiased selection:bg-lime-400 selection:text-slate-950">
+
+    <!-- HEADER / BARRA SUPERIOR -->
+    <header class="sticky top-0 z-40 bg-[#120A24]/90 backdrop-blur-md border-b border-purple-900/40 px-4 py-3">
+        <div class="max-w-7xl mx-auto flex items-center justify-between">
+            <!-- LOGO -->
+            <div class="flex items-center gap-3 cursor-pointer" onclick="window.location.reload()">
+                <div class="w-11 h-11 rounded-2xl bg-gradient-to-tr from-lime-400 via-emerald-500 to-purple-600 flex items-center justify-center text-2xl shadow-lg shadow-lime-500/30">
+                    🍀
+                </div>
+                <div>
+                    <h1 class="text-xl font-black tracking-wider bg-gradient-to-r from-lime-300 via-emerald-400 to-purple-300 bg-clip-text text-transparent">
+                        LUCKY<span class="text-lime-400">FRUIT</span>
+                    </h1>
+                    <p class="text-[10px] text-purple-300/80 font-bold tracking-widest uppercase">High-Tech iGaming</p>
+                </div>
+            </div>
+
+            <!-- CONTROLES DO USUÁRIO -->
+            <div class="flex items-center gap-3">
+                <!-- Se Logado -->
+                <div id="user-logged" class="hidden flex items-center gap-3">
+                    <!-- SALDO -->
+                    <div class="bg-[#1D1138] border border-purple-800/50 rounded-xl px-3.5 py-1.5 flex items-center gap-2 shadow-inner">
+                        <span class="text-xs text-purple-300 font-medium">Saldo:</span>
+                        <span id="user-balance" class="text-lime-400 font-extrabold text-sm md:text-base drop-shadow-sm">R$ 0,00</span>
+                    </div>
+
+                    <!-- BOTÃO DEPÓSITO -->
+                    <button onclick="openModal('deposit-modal')" class="bg-gradient-to-r from-lime-400 via-emerald-400 to-lime-500 hover:from-lime-300 hover:to-emerald-300 text-slate-950 font-black text-xs md:text-sm px-3.5 md:px-4 py-2 rounded-xl flex items-center gap-1.5 shadow-lg shadow-lime-500/25 transition-all hover:scale-105 active:scale-95">
+                        <i class="fa-solid fa-qrcode text-slate-950"></i> Depósito
+                    </button>
+
+                    <!-- BOTÃO SAQUE -->
+                    <button onclick="openModal('withdraw-modal')" class="bg-[#1D1138] hover:bg-purple-900/40 text-slate-200 font-bold text-xs md:text-sm px-3 py-2 rounded-xl border border-purple-800/60 transition-all">
+                        <i class="fa-solid fa-money-bill-transfer text-lime-400"></i> Saque
+                    </button>
+
+                    <!-- PERFIL / SAIR -->
+                    <div class="relative group">
+                        <button class="w-9 h-9 rounded-xl bg-purple-950 border border-purple-500/40 flex items-center justify-center font-bold text-lime-300">
+                            <i class="fa-solid fa-user"></i>
+                        </button>
+                        <div class="absolute right-0 top-11 hidden group-hover:flex flex-col bg-[#160D29] border border-purple-800/60 rounded-xl shadow-2xl p-2 w-48 z-50">
+                            <span id="user-display-name" class="text-xs font-semibold px-3 py-2 text-purple-200 border-b border-purple-900/60"></span>
+                            <button onclick="openModal('history-modal')" class="text-left text-xs text-slate-300 hover:bg-purple-900/40 px-3 py-2 rounded-lg transition"><i class="fa-solid fa-receipt mr-2 text-lime-400"></i> Histórico</button>
+                            <button onclick="logout()" class="text-left text-xs text-rose-400 hover:bg-rose-950/40 px-3 py-2 rounded-lg transition mt-1"><i class="fa-solid fa-right-from-bracket mr-2"></i> Sair</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Se Deslogado -->
+                <div id="user-guest" class="flex items-center gap-2">
+                    <button onclick="openModal('login-modal')" class="text-xs md:text-sm font-semibold text-purple-200 hover:text-white px-3 py-2">
+                        Entrar
+                    </button>
+                    <button onclick="openModal('register-modal')" class="bg-gradient-to-r from-lime-400 to-emerald-500 hover:from-lime-300 hover:to-emerald-400 text-slate-950 font-black text-xs md:text-sm px-4 py-2 rounded-xl shadow-lg shadow-lime-500/20 transition-all hover:scale-105">
+                        Criar Conta
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- CONTEÚDO PRINCIPAL -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 grid grid-cols-1 lg:grid-cols-4 gap-6">
+
+        <!-- PAINEL LATERAL / GANHADORES RECENTES -->
+        <aside class="lg:col-span-1 flex flex-col gap-4 order-2 lg:order-1">
+            <!-- BÔNUS DE BOAS VINDAS -->
+            <div class="bg-gradient-to-br from-purple-900/50 via-[#1D1138] to-lime-950/30 border border-lime-500/30 rounded-2xl p-4 shadow-xl relative overflow-hidden">
+                <div class="flex items-center gap-3 relative z-10">
+                    <span class="text-3xl">🎁</span>
+                    <div>
+                        <h3 class="font-bold text-sm text-lime-300">Bônus Neon Grátis!</h3>
+                        <p class="text-xs text-purple-200/80">Cadastre-se e receba <b>R$ 100,00</b> em créditos de teste na hora!</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- FEED DE GANHADORES AO VIVO -->
+            <div class="bg-[#120A24]/90 border border-purple-900/50 rounded-2xl p-4 flex flex-col flex-1 shadow-xl">
+                <div class="flex items-center justify-between mb-3 border-b border-purple-900/40 pb-2">
+                    <h3 class="text-xs font-bold uppercase tracking-wider text-purple-300 flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 rounded-full bg-lime-400 animate-ping"></span> Ganhadores Recentes
+                    </h3>
+                    <i class="fa-solid fa-trophy text-amber-400 text-sm"></i>
+                </div>
+                <div id="live-wins-list" class="flex flex-col gap-2 max-h-[350px] overflow-y-auto pr-1">
+                    <!-- Gerado Dinamicamente -->
+                    <div class="text-xs text-purple-400/60 text-center py-4">Carregando vencedores...</div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- ÁREA DO MINI-JOGO (LUCKY FRUIT SPIN) -->
+        <section class="lg:col-span-3 flex flex-col items-center justify-center order-1 lg:order-2">
+
+            <div class="w-full bg-[#120A24]/90 border border-purple-900/50 rounded-3xl p-6 shadow-2xl relative overflow-hidden flex flex-col items-center">
+                <!-- EFEITO DE LUZ CYBER NEON DE FUNDO -->
+                <div class="absolute -top-24 left-1/2 -translate-x-1/2 w-96 h-96 bg-gradient-to-br from-lime-500/15 via-purple-600/20 to-transparent rounded-full blur-3xl pointer-events-none"></div>
+
+                <!-- TÍTULO DO JOGO -->
+                <div class="text-center mb-6 z-10">
+                    <span class="bg-purple-950/80 border border-lime-400/40 text-lime-300 text-[11px] font-bold px-3.5 py-1 rounded-full uppercase tracking-widest shadow-sm">
+                        High-Tech Slot Machine
+                    </span>
+                    <h2 class="text-3xl md:text-5xl font-black mt-2 bg-gradient-to-r from-lime-300 via-emerald-300 to-purple-300 bg-clip-text text-transparent">
+                        LUCKY FRUIT SPIN 🍀🍓🍉
+                    </h2>
+                    <p class="text-xs text-purple-300/80 mt-1">Combine 3 frutas iguais para o Jackpot Neon ou 2 frutas para prêmios parciais!</p>
+                </div>
+
+                <!-- CONTAINER DO SLOT (BOBINAS CYBER) -->
+                <div class="relative w-full max-w-lg bg-[#090514] border-4 border-purple-800/60 rounded-2xl p-6 shadow-2xl my-4 z-10">
+                    <!-- PAINEL DAS BOBINAS -->
+                    <div class="grid grid-cols-3 gap-3 md:gap-4 text-center">
+                        <div class="reel-box bg-[#150C2B] border-2 border-purple-900/80 rounded-xl py-6 flex items-center justify-center text-5xl md:text-6xl shadow-inner relative overflow-hidden h-28 md:h-32">
+                            <span id="reel1" class="reel-symbol transition-transform duration-300">🍓</span>
+                        </div>
+                        <div class="reel-box bg-[#150C2B] border-2 border-purple-900/80 rounded-xl py-6 flex items-center justify-center text-5xl md:text-6xl shadow-inner relative overflow-hidden h-28 md:h-32">
+                            <span id="reel2" class="reel-symbol transition-transform duration-300">🍉</span>
+                        </div>
+                        <div class="reel-box bg-[#150C2B] border-2 border-purple-900/80 rounded-xl py-6 flex items-center justify-center text-5xl md:text-6xl shadow-inner relative overflow-hidden h-28 md:h-32">
+                            <span id="reel3" class="reel-symbol transition-transform duration-300">🍇</span>
+                        </div>
+                    </div>
+
+                    <!-- MENSAGEM DE RESULTADO DA RODADA -->
+                    <div id="game-result-banner" class="mt-4 min-h-[36px] flex items-center justify-center font-bold text-sm md:text-base text-center transition-all">
+                        <span class="text-purple-300/60">Aperte o botão para tentar a sorte!</span>
+                    </div>
+                </div>
+
+                <!-- CONTROLES DE APOSTA -->
+                <div class="w-full max-w-lg bg-[#090514]/80 border border-purple-900/60 rounded-2xl p-4 z-10 flex flex-col gap-4">
+                    <div class="flex items-center justify-between">
+                        <label class="text-xs font-semibold text-purple-300">Valor da Aposta (R$):</label>
+                        <div class="flex items-center gap-1.5">
+                            <button onclick="setBet(1)" class="bg-[#1D1138] hover:bg-purple-900/60 text-xs px-2.5 py-1 rounded-lg border border-purple-800/60 font-bold text-purple-200">R$ 1</button>
+                            <button onclick="setBet(5)" class="bg-[#1D1138] hover:bg-purple-900/60 text-xs px-2.5 py-1 rounded-lg border border-purple-800/60 font-bold text-purple-200">R$ 5</button>
+                            <button onclick="setBet(10)" class="bg-[#1D1138] hover:bg-purple-900/60 text-xs px-2.5 py-1 rounded-lg border border-purple-800/60 font-bold text-purple-200">R$ 10</button>
+                            <button onclick="setBet(25)" class="bg-[#1D1138] hover:bg-purple-900/60 text-xs px-2.5 py-1 rounded-lg border border-purple-800/60 font-bold text-purple-200">R$ 25</button>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-3">
+                        <div class="relative flex-1">
+                            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-purple-400 font-bold text-sm">R$</span>
+                            <input type="number" id="bet-amount" value="5.00" min="1" step="1" class="w-full bg-[#150C2B] border border-purple-800/80 rounded-xl pl-9 pr-4 py-2.5 font-black text-lime-400 focus:outline-none focus:border-lime-400">
+                        </div>
+                        <button id="spin-btn" onclick="spinGame()" class="flex-1 bg-gradient-to-r from-lime-400 via-emerald-400 to-lime-500 hover:from-lime-300 hover:to-emerald-300 text-slate-950 font-black text-lg py-3 rounded-xl shadow-lg shadow-lime-500/25 transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-play text-slate-950"></i> GIRAR
+                        </button>
+                    </div>
+                </div>
+
+                <!-- TABELA DE MULTIPLICADORES -->
+                <div class="mt-6 w-full max-w-lg grid grid-cols-3 md:grid-cols-6 gap-2 text-center text-[11px]">
+                    <div class="bg-[#090514] border border-purple-900/60 p-2 rounded-xl text-purple-200">🍓 <b>10x</b></div>
+                    <div class="bg-[#090514] border border-purple-900/60 p-2 rounded-xl text-purple-200">🍉 <b>6x</b></div>
+                    <div class="bg-[#090514] border border-purple-900/60 p-2 rounded-xl text-purple-200">🍇 <b>5x</b></div>
+                    <div class="bg-[#090514] border border-purple-900/60 p-2 rounded-xl text-purple-200">🍌 <b>4x</b></div>
+                    <div class="bg-[#090514] border border-purple-900/60 p-2 rounded-xl text-purple-200">🍊 <b>3x</b></div>
+                    <div class="bg-[#090514] border border-purple-900/60 p-2 rounded-xl text-purple-200">🍋 <b>2.4x</b></div>
+                </div>
+
+            </div>
+        </section>
+
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="bg-[#0B0716] border-t border-purple-950 py-6 text-center text-xs text-purple-400/60">
+        <p>© 2026 LuckyFruit Gaming - Todos os direitos reservados.</p>
+        <p class="mt-1 text-[11px]">Jogo responsável. Proibido para menores de 18 anos.</p>
+    </footer>
+
+    <!-- ================= MODAIS CYBER ================= -->
+
+    <!-- MODAL DE CADASTRO -->
+    <div id="register-modal" class="modal fixed inset-0 z-50 hidden bg-[#090514]/85 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="bg-[#120A24] border border-purple-800/60 rounded-3xl p-6 w-full max-w-md shadow-2xl relative">
+            <button onclick="closeModal('register-modal')" class="absolute top-4 right-4 text-purple-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+            <h3 class="text-xl font-bold text-slate-100 mb-1">Criar Conta no LuckyFruit</h3>
+            <p class="text-xs text-purple-300/80 mb-4">Cadastre-se e ganhe R$ 100,00 de bônus imediato.</p>
+            <form onsubmit="handleRegister(event)" class="flex flex-col gap-3">
+                <div>
+                    <label class="text-xs text-purple-300 font-semibold mb-1 block">Nome de Usuário</label>
+                    <input type="text" id="reg-username" required class="w-full bg-[#090514] border border-purple-900/80 rounded-xl px-4 py-2.5 text-sm focus:border-lime-400 outline-none">
+                </div>
+                <div>
+                    <label class="text-xs text-purple-300 font-semibold mb-1 block">E-mail</label>
+                    <input type="email" id="reg-email" required class="w-full bg-[#090514] border border-purple-900/80 rounded-xl px-4 py-2.5 text-sm focus:border-lime-400 outline-none">
+                </div>
+                <div>
+                    <label class="text-xs text-purple-300 font-semibold mb-1 block">Senha</label>
+                    <input type="password" id="reg-password" required class="w-full bg-[#090514] border border-purple-900/80 rounded-xl px-4 py-2.5 text-sm focus:border-lime-400 outline-none">
+                </div>
+                <button type="submit" class="mt-2 bg-gradient-to-r from-lime-400 to-emerald-500 font-black text-slate-950 text-sm py-3 rounded-xl shadow-lg shadow-lime-500/20 hover:scale-[1.02] active:scale-95 transition">
+                    Cadastrar e Resgatar Bônus
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL DE LOGIN -->
+    <div id="login-modal" class="modal fixed inset-0 z-50 hidden bg-[#090514]/85 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="bg-[#120A24] border border-purple-800/60 rounded-3xl p-6 w-full max-w-md shadow-2xl relative">
+            <button onclick="closeModal('login-modal')" class="absolute top-4 right-4 text-purple-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+            <h3 class="text-xl font-bold text-slate-100 mb-1">Acessar Conta</h3>
+            <p class="text-xs text-purple-300/80 mb-4">Entre com suas credenciais de acesso.</p>
+            <form onsubmit="handleLogin(event)" class="flex flex-col gap-3">
+                <div>
+                    <label class="text-xs text-purple-300 font-semibold mb-1 block">Usuário ou E-mail</label>
+                    <input type="text" id="login-username" required class="w-full bg-[#090514] border border-purple-900/80 rounded-xl px-4 py-2.5 text-sm focus:border-lime-400 outline-none">
+                </div>
+                <div>
+                    <label class="text-xs text-purple-300 font-semibold mb-1 block">Senha</label>
+                    <input type="password" id="login-password" required class="w-full bg-[#090514] border border-purple-900/80 rounded-xl px-4 py-2.5 text-sm focus:border-lime-400 outline-none">
+                </div>
+                <button type="submit" class="mt-2 bg-gradient-to-r from-lime-400 to-emerald-500 font-black text-slate-950 text-sm py-3 rounded-xl shadow-lg shadow-lime-500/20 hover:scale-[1.02] active:scale-95 transition">
+                    Entrar no LuckyFruit
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL DE DEPÓSITO PIX -->
+    <div id="deposit-modal" class="modal fixed inset-0 z-50 hidden bg-[#090514]/85 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="bg-[#120A24] border border-purple-800/60 rounded-3xl p-6 w-full max-w-md shadow-2xl relative">
+            <button onclick="closeModal('deposit-modal')" class="absolute top-4 right-4 text-purple-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+            <h3 class="text-xl font-bold text-slate-100 mb-1 flex items-center gap-2"><i class="fa-solid fa-qrcode text-lime-400"></i> Depósito via PIX</h3>
+            <p class="text-xs text-purple-300/80 mb-4">Adicione saldo instantâneo à sua conta.</p>
+            
+            <div id="deposit-form-step">
+                <label class="text-xs text-purple-300 font-semibold mb-1 block">Valor do Depósito (R$)</label>
+                <div class="grid grid-cols-4 gap-2 mb-3">
+                    <button onclick="setDepositAmount(10)" class="bg-[#090514] border border-purple-900/80 text-xs py-2 rounded-lg font-bold hover:border-lime-400 text-purple-200">R$ 10</button>
+                    <button onclick="setDepositAmount(25)" class="bg-[#090514] border border-purple-900/80 text-xs py-2 rounded-lg font-bold hover:border-lime-400 text-purple-200">R$ 25</button>
+                    <button onclick="setDepositAmount(50)" class="bg-[#090514] border border-purple-900/80 text-xs py-2 rounded-lg font-bold hover:border-lime-400 text-purple-200">R$ 50</button>
+                    <button onclick="setDepositAmount(100)" class="bg-[#090514] border border-purple-900/80 text-xs py-2 rounded-lg font-bold hover:border-lime-400 text-purple-200">R$ 100</button>
+                </div>
+                <div class="relative mb-4">
+                    <span class="absolute left-3 top-1/2 -translate-y-1/2 text-purple-400 font-bold text-sm">R$</span>
+                    <input type="number" id="deposit-amount" value="25.00" min="5" step="1" class="w-full bg-[#090514] border border-purple-900/80 rounded-xl pl-9 pr-4 py-2.5 font-bold text-lime-400 outline-none">
+                </div>
+                <button onclick="generatePix()" class="w-full bg-lime-400 hover:bg-lime-300 text-slate-950 font-black text-sm py-3 rounded-xl shadow-lg shadow-lime-500/20 transition">
+                    Gerar QR Code PIX
+                </button>
+            </div>
+
+            <!-- RESULTADO PIX GERADO -->
+            <div id="deposit-qr-step" class="hidden flex flex-col items-center text-center">
+                <div class="bg-white p-3 rounded-2xl shadow-xl my-2 border-2 border-lime-400">
+                    <img id="pix-qr-img" src="" alt="QR Code PIX" class="w-44 h-44 object-contain">
+                </div>
+                <p class="text-xs text-purple-300/80 mb-2">Escaneie com o app do seu banco ou copie a chave abaixo:</p>
+                <div class="w-full bg-[#090514] border border-purple-900/80 rounded-xl p-2 flex items-center justify-between mb-4">
+                    <input type="text" id="pix-code-input" readonly class="bg-transparent text-[11px] text-purple-200 w-full outline-none px-2 font-mono">
+                    <button onclick="copyPixCode()" class="bg-purple-900/60 hover:bg-purple-800 text-xs px-3 py-1.5 rounded-lg font-bold text-lime-400 whitespace-nowrap">
+                        Copiar
+                    </button>
+                </div>
+                
+                <!-- BOTÃO DE SIMULAÇÃO DE PAGAMENTO PARA TESTE -->
+                <div class="bg-purple-950/60 border border-lime-400/40 p-3 rounded-xl w-full">
+                    <p class="text-[11px] text-lime-300 font-medium mb-2">Modo de Teste: Simular aprovação instantânea do PIX</p>
+                    <button onclick="simulatePixPayment()" class="w-full bg-lime-400 hover:bg-lime-300 text-slate-950 font-black text-xs py-2 rounded-lg transition shadow">
+                        Simular Pagamento Efetuado
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DE SAQUE -->
+    <div id="withdraw-modal" class="modal fixed inset-0 z-50 hidden bg-[#090514]/85 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="bg-[#120A24] border border-purple-800/60 rounded-3xl p-6 w-full max-w-md shadow-2xl relative">
+            <button onclick="closeModal('withdraw-modal')" class="absolute top-4 right-4 text-purple-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+            <h3 class="text-xl font-bold text-slate-100 mb-1 flex items-center gap-2"><i class="fa-solid fa-money-bill-transfer text-lime-400"></i> Solicitar Saque</h3>
+            <p class="text-xs text-purple-300/80 mb-4">Transfira seus prêmios diretamente via PIX.</p>
+            <form onsubmit="handleWithdraw(event)" class="flex flex-col gap-3">
+                <div>
+                    <label class="text-xs text-purple-300 font-semibold mb-1 block">Chave PIX (CPF, E-mail, Celular ou Aleatória)</label>
+                    <input type="text" id="withdraw-pix-key" required placeholder="Sua chave PIX aqui" class="w-full bg-[#090514] border border-purple-900/80 rounded-xl px-4 py-2.5 text-sm focus:border-lime-400 outline-none">
+                </div>
+                <div>
+                    <label class="text-xs text-purple-300 font-semibold mb-1 block">Valor do Saque (Mínimo R$ 20,00)</label>
+                    <div class="relative">
+                        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-purple-400 font-bold text-sm">R$</span>
+                        <input type="number" id="withdraw-amount" min="20" step="1" required class="w-full bg-[#090514] border border-purple-900/80 rounded-xl pl-9 pr-4 py-2.5 font-bold text-lime-400 outline-none">
+                    </div>
+                </div>
+                <button type="submit" class="mt-2 bg-gradient-to-r from-lime-400 to-emerald-500 font-black text-slate-950 text-sm py-3 rounded-xl shadow-lg shadow-lime-500/20 hover:scale-[1.02] active:scale-95 transition">
+                    Confirmar Saque PIX
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL DE HISTÓRICO DE TRANSAÇÕES -->
+    <div id="history-modal" class="modal fixed inset-0 z-50 hidden bg-[#090514]/85 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="bg-[#120A24] border border-purple-800/60 rounded-3xl p-6 w-full max-w-lg shadow-2xl relative">
+            <button onclick="closeModal('history-modal')" class="absolute top-4 right-4 text-purple-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+            <h3 class="text-xl font-bold text-slate-100 mb-1 flex items-center gap-2"><i class="fa-solid fa-receipt text-lime-400"></i> Histórico de Transações</h3>
+            <p class="text-xs text-purple-300/80 mb-4">Últimas movimentações da sua conta.</p>
+            
+            <div id="history-list" class="flex flex-col gap-2 max-h-80 overflow-y-auto pr-1 text-xs">
+                <!-- Preenchido via JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- NOTIFICAÇÃO TOAST NEON -->
+    <div id="toast" class="fixed bottom-5 right-5 z-50 hidden bg-[#160D29] border border-purple-800 px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 transition-all transform translate-y-full">
+        <span id="toast-icon" class="text-xl">ℹ️</span>
+        <span id="toast-message" class="text-xs font-semibold text-purple-200">Notificação</span>
+    </div>
+
+    <script src="/js/app.js"></script>
+    <script src="/js/game.js"></script>
+</body>
+</html>
