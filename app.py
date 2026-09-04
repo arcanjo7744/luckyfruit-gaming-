@@ -47,9 +47,6 @@ def init_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
-        transaction_columns = {row['name'] for row in cursor.execute("PRAGMA table_info(transactions)")}
-        if 'gateway_token' not in transaction_columns:
-            cursor.execute("ALTER TABLE transactions ADD COLUMN gateway_token TEXT")
         # Controle de rollover do bônus de depósito. ALTER é necessário para
         # instalações que já possuem a tabela users criada.
         user_columns = {row['name'] for row in cursor.execute("PRAGMA table_info(users)")}
@@ -71,6 +68,9 @@ def init_db():
                 FOREIGN KEY (user_id) REFERENCES users (id)
             )
         ''')
+        transaction_columns = {row['name'] for row in cursor.execute("PRAGMA table_info(transactions)")}
+        if 'gateway_token' not in transaction_columns:
+            cursor.execute("ALTER TABLE transactions ADD COLUMN gateway_token TEXT")
         # Tabela de Apostas do Jogo
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS bets (
