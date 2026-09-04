@@ -485,6 +485,9 @@ function setBet(amount) {
     if (gameState === 'PLAYING') return;
     currentBetAmount = amount;
     document.getElementById('bet-amount').value = amount.toFixed(2);
+    document.querySelectorAll('.bet-preset').forEach(button => {
+        button.classList.toggle('is-selected', Number(button.dataset.bet) === amount);
+    });
     updateHUD();
 }
 
