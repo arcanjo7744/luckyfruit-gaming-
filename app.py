@@ -554,6 +554,8 @@ def recent_wins():
 
 @app.route('/')
 def index():
+    if request.args.get('view') == 'arena':
+        return send_from_directory(PUBLIC_DIR, 'index.html')
     return send_from_directory(PUBLIC_DIR, 'landing.html')
 
 @app.route('/arena')
@@ -562,6 +564,13 @@ def arena():
 
 @app.route('/<path:path>')
 def serve_static(path):
+    # Vercel forwards public requests to this internal function path. Use the
+    # query to switch views so the public root can stay the landing page.
+    if path == 'api/index':
+        if request.args.get('view') == 'arena':
+            return send_from_directory(PUBLIC_DIR, 'index.html')
+        return send_from_directory(PUBLIC_DIR, 'landing.html')
+
     target_path = os.path.join(PUBLIC_DIR, path)
     if os.path.exists(target_path):
         return send_from_directory(PUBLIC_DIR, path)
@@ -570,4 +579,3 @@ def serve_static(path):
 if __name__ == '__main__':
     print("Servidor LuckyFruit Gaming rodando na porta 3000 (http://localhost:3000)")
     app.run(host='0.0.0.0', port=3000, debug=True)
-
