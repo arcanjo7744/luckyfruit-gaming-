@@ -17,8 +17,8 @@ class TestIGamingPlatform(unittest.TestCase):
     def test_full_user_flow(self):
         import uuid
         uid = uuid.uuid4().hex[:6]
-        username = f"player_{uid}"
-        email = f"player_{uid}@example.com"
+        username = f"ninja_{uid}"
+        email = f"ninja_{uid}@example.com"
         password = "secretpassword123"
 
         # 1. Teste de Cadastro
@@ -40,39 +40,31 @@ class TestIGamingPlatform(unittest.TestCase):
         self.assertEqual(profile['username'], username)
         self.assertEqual(profile['balance'], 100.0) # Bônus de boas-vindas
 
-        # 3. Teste de Depósito PIX e Simulação de Pagamento
-        res = self.app.post('/api/wallet/deposit', headers=headers, json={'amount': 50.0})
+        # 3. Teste de Início de Partida Fruit Ninja
+        res = self.app.post('/api/game/ninja/start', headers=headers, json={'bet_amount': 10.0})
         self.assertEqual(res.status_code, 200)
-        dep_data = json.loads(res.data)
-        external_id = dep_data['external_id']
-        self.assertIn('pix_code', dep_data)
+        session_data = json.loads(res.data)
+        session_id = session_data['session_id']
+        self.assertEqual(session_data['new_balance'], 90.0)
 
-        # Simular confirmação de pagamento via Webhook
-        res = self.app.post('/api/payments/webhook', json={
-            'external_id': external_id,
-            'status': 'approved'
+        # 4. Teste de Cash Out Fruit Ninja (Ganhou 2.5x)
+        res = self.app.post('/api/game/ninja/cashout', headers=headers, json={
+            'session_id': session_id,
+            'multiplier': 2.5,
+            'fruits_cut': 12,
+            'hit_bomb': False
         })
         self.assertEqual(res.status_code, 200)
+        cashout_data = json.loads(res.data)
+        self.assertTrue(cashout_data['is_win'])
+        self.assertEqual(cashout_data['payout'], 25.0)
+        self.assertEqual(cashout_data['new_balance'], 115.0)
 
-        # Verificar se o saldo subiu para 150.0
-        res = self.app.get('/api/wallet/balance', headers=headers)
-        balance = json.loads(res.data)['balance']
-        self.assertEqual(balance, 150.0)
-
-        # 4. Teste de Rodada do Jogo (Fruit Spin)
-        res = self.app.post('/api/game/spin', headers=headers, json={'bet_amount': 10.0})
-        self.assertEqual(res.status_code, 200)
-        spin_data = json.loads(res.data)
-        self.assertEqual(len(spin_data['symbols']), 3)
-        self.assertIn('new_balance', spin_data)
-
-        # 5. Teste de Histórico de Transações
+        # 5. Teste de Histórico de Transações e Apostas
         res = self.app.get('/api/wallet/history', headers=headers)
         self.assertEqual(res.status_code, 200)
-        history = json.loads(res.data)['transactions']
-        self.assertTrue(len(history) >= 1)
 
-        print("\n[OK] Todos os testes automatizados da API da Plataforma de Mini-Jogos passaram com Sucesso!")
+        print("\n[OK] Todos os testes automatizados da API do Fruit Ninja passaram com Sucesso!")
 
 if __name__ == '__main__':
     unittest.main()

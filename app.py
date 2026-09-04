@@ -78,6 +78,9 @@ def init_db():
 # Inicializa o banco no carregamento
 init_db()
 
+# Sessões ativas de partidas do Fruit Ninja
+ACTIVE_SESSIONS = {}
+
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
@@ -381,30 +384,11 @@ def simulate_pay(current_user_id):
         'new_balance': new_balance
     })
 
-# ----------------- LÓGICA DO MINI-JOGO LUCKYFRUIT SPIN -----------------
+# ----------------- MOTOR DO JOGO FRUIT NINJA APOSTAS -----------------
 
-FRUIT_SYMBOLS = [
-    {'name': 'Morango', 'icon': '🍓', 'multiplier': 10.0, 'weight': 10},
-    {'name': 'Melancia', 'icon': '🍉', 'multiplier': 6.0, 'weight': 15},
-    {'name': 'Uva', 'icon': '🍇', 'multiplier': 5.0, 'weight': 20},
-    {'name': 'Banana', 'icon': '🍌', 'multiplier': 4.0, 'weight': 25},
-    {'name': 'Laranja', 'icon': '🍊', 'multiplier': 3.0, 'weight': 30},
-    {'name': 'Limão', 'icon': '🍋', 'multiplier': 2.4, 'weight': 35},
-]
-
-def pick_random_symbol():
-    total_weight = sum(s['weight'] for s in FRUIT_SYMBOLS)
-    r = random.uniform(0, total_weight)
-    current = 0
-    for symbol in FRUIT_SYMBOLS:
-        current += symbol['weight']
-        if r <= current:
-            return symbol
-    return FRUIT_SYMBOLS[-1]
-
-@app.route('/api/game/spin', methods=['POST'])
+@app.route('/api/game/ninja/start', methods=['POST'])
 @token_required
-def game_spin(current_user_id):
+def ninja_start(current_user_id):
     data = request.get_json() or {}
     try:
         bet_amount = float(data.get('bet_amount', 0))
@@ -420,53 +404,73 @@ def game_spin(current_user_id):
         user = cursor.fetchone()
 
         if not user or user['balance'] < bet_amount:
-            return jsonify({'message': 'Saldo insuficiente para esta aposta!'}), 400
+            return jsonify({'message': 'Saldo insuficiente para iniciar esta partida!'}), 400
 
-        # Selecionar 3 símbolos aleatórios
-        s1 = pick_random_symbol()
-        s2 = pick_random_symbol()
-        s3 = pick_random_symbol()
+        # Debitar o valor da aposta
+        new_balance = round(user['balance'] - bet_amount, 2)
+        cursor.execute("UPDATE users SET balance = ? WHERE id = ?", (new_balance, current_user_id))
+        conn.commit()
 
-        symbols_chosen = [s1, s2, s3]
-        symbols_icons = [s['icon'] for s in symbols_chosen]
+        session_id = uuid.uuid4().hex
+        ACTIVE_SESSIONS[session_id] = {
+            'user_id': current_user_id,
+            'username': user['username'],
+            'bet_amount': bet_amount,
+            'started_at': datetime.datetime.now(datetime.timezone.utc)
+        }
 
-        # Verificar se é vitória
-        is_win = False
-        multiplier = 0.0
-        payout = 0.0
+    return jsonify({
+        'session_id': session_id,
+        'bet_amount': bet_amount,
+        'new_balance': new_balance,
+        'message': 'Partida iniciada! Fatie as frutas e evite as bombas.'
+    })
 
-        if s1['icon'] == s2['icon'] == s3['icon']:
-            # 3 iguais: Jackpot do Símbolo
-            is_win = True
-            multiplier = s1['multiplier']
-        elif s1['icon'] == s2['icon'] or s2['icon'] == s3['icon'] or s1['icon'] == s3['icon']:
-            # 2 iguais: Prêmio Parcial
-            matching_symbol = s1 if s1['icon'] == s2['icon'] or s1['icon'] == s3['icon'] else s2
-            is_win = True
-            multiplier = round(matching_symbol['multiplier'] * 0.4, 2)
-        
-        if is_win:
-            payout = round(bet_amount * multiplier, 2)
+@app.route('/api/game/ninja/cashout', methods=['POST'])
+@token_required
+def ninja_cashout(current_user_id):
+    data = request.get_json() or {}
+    session_id = data.get('session_id')
+    try:
+        multiplier = float(data.get('multiplier', 1.0))
+        fruits_cut = int(data.get('fruits_cut', 0))
+        hit_bomb = bool(data.get('hit_bomb', False))
+    except (ValueError, TypeError):
+        return jsonify({'message': 'Dados de partida inválidos!'}), 400
 
-        new_balance = round(user['balance'] - bet_amount + payout, 2)
+    session = ACTIVE_SESSIONS.pop(session_id, None)
+    if not session or session['user_id'] != current_user_id:
+        return jsonify({'message': 'Sessão de jogo expirada ou inválida!'}), 400
 
-        # Atualizar saldo do usuário no banco
+    bet_amount = session['bet_amount']
+    payout = 0.0
+    is_win = False
+
+    if not hit_bomb and multiplier > 1.0:
+        is_win = True
+        payout = round(bet_amount * multiplier, 2)
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT balance, username FROM users WHERE id = ?", (current_user_id,))
+        user = cursor.fetchone()
+
+        new_balance = round(user['balance'] + payout, 2)
         cursor.execute("UPDATE users SET balance = ? WHERE id = ?", (new_balance, current_user_id))
 
-        # Registrar aposta no histórico
+        # Registrar no histórico de apostas
         cursor.execute(
             "INSERT INTO bets (user_id, username, bet_amount, payout, win, symbols, multiplier) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (current_user_id, user['username'], bet_amount, payout, 1 if is_win else 0, ",".join(symbols_icons), multiplier)
+            (current_user_id, user['username'], bet_amount, payout, 1 if is_win else 0, f"🔪 {fruits_cut} Frutas", multiplier if is_win else 0.0)
         )
         conn.commit()
 
     return jsonify({
-        'symbols': symbols_icons,
         'is_win': is_win,
-        'multiplier': multiplier,
         'payout': payout,
-        'bet_amount': bet_amount,
-        'new_balance': new_balance
+        'multiplier': multiplier if is_win else 0.0,
+        'new_balance': new_balance,
+        'message': f'Cash Out realizado! Você ganhou R$ {payout:.2f}' if is_win else 'Você acertou uma bomba! Aposta perdida.'
     })
 
 @app.route('/api/game/recent-wins', methods=['GET'])
