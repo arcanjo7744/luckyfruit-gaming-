@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LuckyFruit Gaming - Fruit Ninja Arcade Betting</title>
+    <title>LuckyFruit Gaming - Fruit Ninja Skill Arcade</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -58,15 +58,6 @@
                         <span id="user-balance" class="text-lime-400 font-extrabold text-sm md:text-base drop-shadow-sm">R$ 0,00</span>
                     </div>
 
-                    <!-- BOTÃO DEPÓSITO -->
-                    <button onclick="openModal('deposit-modal')" class="bg-gradient-to-r from-lime-400 via-emerald-400 to-lime-500 hover:from-lime-300 hover:to-emerald-300 text-slate-950 font-black text-xs md:text-sm px-3.5 md:px-4 py-2 rounded-xl flex items-center gap-1.5 shadow-lg shadow-lime-500/25 transition-all hover:scale-105 active:scale-95">
-                        <i class="fa-solid fa-qrcode text-slate-950"></i> Depósito
-                    </button>
-
-                    <!-- BOTÃO SAQUE -->
-                    <button onclick="openModal('withdraw-modal')" class="bg-[#1D1138] hover:bg-purple-900/40 text-slate-200 font-bold text-xs md:text-sm px-3 py-2 rounded-xl border border-purple-800/60 transition-all">
-                        <i class="fa-solid fa-money-bill-transfer text-lime-400"></i> Saque
-                    </button>
 
                     <!-- PERFIL / SAIR -->
                     <div class="relative group">
@@ -99,13 +90,13 @@
 
         <!-- PAINEL LATERAL / GANHADORES RECENTES -->
         <aside class="lg:col-span-1 flex flex-col gap-4 order-2 lg:order-1">
-            <!-- INSTRUÇÃO 2,5% POR FRUTA -->
+            <!-- INSTRUÇÃO JOGO DE HABILIDADE -->
             <div class="bg-gradient-to-br from-purple-900/50 via-[#1D1138] to-lime-950/30 border border-lime-500/30 rounded-2xl p-4 shadow-xl relative overflow-hidden">
                 <div class="flex items-center gap-3 relative z-10">
-                    <span class="text-3xl">💰</span>
+                    <span class="text-3xl">🥷</span>
                     <div>
-                        <h3 class="font-bold text-sm text-lime-300">Lucro de 2,5% por Fruta!</h3>
-                        <p class="text-xs text-purple-200/80">Cada fruta fatiada rende **2,5% do valor apostado**! Na aposta base de R$ 25,00, você ganha **R$ 0,63 por fruta** fatiada!</p>
+                        <h3 class="font-bold text-sm text-lime-300">Jogo de Habilidade & Reflexo!</h3>
+                        <p class="text-xs text-purple-200/80">Comece em <strong>+2,5% por fruta</strong> e chegue a <strong>+11%</strong> nas sequências de elite. Cada corte acelera o jogo, traz mais combos e aumenta o risco das bombas 💣.</p>
                     </div>
                 </div>
             </div>
@@ -132,16 +123,17 @@
                 <!-- EFEITO DE LUZ CYBER NEON DE FUNDO -->
                 <div class="absolute -top-24 left-1/2 -translate-x-1/2 w-96 h-96 bg-gradient-to-br from-lime-500/15 via-purple-600/20 to-transparent rounded-full blur-3xl pointer-events-none"></div>
 
-                <!-- HUD SUPERIOR DO JOGO (MULTIPLICADOR, TAXA DE 2.5% & LUCRO) -->
+                <!-- HUD SUPERIOR DO JOGO (MULTIPLICADOR, TAXA & LUCRO) -->
                 <div class="w-full max-w-2xl flex items-center justify-between bg-[#090514] border border-purple-900/80 rounded-2xl px-4 py-2.5 mb-3 z-10">
                     <div class="flex flex-col">
                         <span id="hud-level" class="text-[11px] font-black text-amber-400 uppercase tracking-wider">⚡ NÍVEL 1</span>
                         <span id="hud-fruits-cut" class="font-extrabold text-lime-400 text-xs md:text-sm">🍓 0 Frutas</span>
+                        <span id="hud-missed" class="text-[10px] font-bold text-rose-300">⚠️ 0/5 perdidas</span>
                     </div>
                     <div class="text-center">
                         <span class="text-[10px] text-purple-300 uppercase tracking-widest block font-bold">Multiplicador</span>
                         <span id="hud-multiplier" class="font-black text-2xl bg-gradient-to-r from-lime-300 via-emerald-300 to-lime-400 bg-clip-text text-transparent">1.00x</span>
-                        <span id="hud-fruit-rate" class="text-[10px] text-lime-300 font-bold block">+R$ 0,63/fruta (2,5%)</span>
+                        <span id="hud-fruit-rate" class="text-[10px] text-lime-300 font-bold block">+R$ 0,63/fruta (+2,5%)</span>
                     </div>
                     <div class="text-right">
                         <span class="text-xs text-purple-300">Lucro Atual:</span>
@@ -157,21 +149,21 @@
                     <div id="ninja-overlay" class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center z-20 transition-all">
                         <span class="text-4xl mb-2">🥷🍓💣</span>
                         <h3 id="overlay-title" class="text-2xl md:text-3xl font-black text-lime-300">LUCKY FRUIT NINJA</h3>
-                        <p id="overlay-subtitle" class="text-xs text-purple-200 mt-1 max-w-md">Cada fruta fatiada concede **2,5% de ganho sobre o valor da aposta**! A cada 6 frutas a velocidade e bônus sobem!</p>
+                        <p id="overlay-subtitle" class="text-xs text-purple-200 mt-1 max-w-md">Corte com precisão: o prêmio sobe de +2,5% até +11% por fruta, mas cada corte deixa a arena mais rápida e perigosa. Faça CASH OUT no momento certo!</p>
                     </div>
                 </div>
 
                 <!-- CONTROLES DE APOSTA & CASH OUT -->
                 <div class="w-full max-w-2xl bg-[#090514]/80 border border-purple-900/60 rounded-2xl p-4 mt-4 z-10 flex flex-col gap-4">
-                    <!-- SELETOR DE APOSTA -->
+                    <!-- SELETOR DE APOSTA (VALORES DO PRINT) -->
                     <div class="flex items-center justify-between">
                         <label class="text-xs font-semibold text-purple-300">Valor da Aposta (R$):</label>
                         <div class="flex items-center gap-1.5">
-                            <button onclick="setBet(5)" class="bg-[#1D1138] hover:bg-purple-900/60 text-xs px-2.5 py-1 rounded-lg border border-purple-800/60 font-bold text-purple-200">R$ 5</button>
-                            <button onclick="setBet(10)" class="bg-[#1D1138] hover:bg-purple-900/60 text-xs px-2.5 py-1 rounded-lg border border-purple-800/60 font-bold text-purple-200">R$ 10</button>
-                            <button onclick="setBet(25)" class="bg-[#1D1138] hover:bg-purple-900/60 text-xs px-2.5 py-1 rounded-lg border border-purple-800/60 font-bold text-purple-200">R$ 25</button>
-                            <button onclick="setBet(50)" class="bg-[#1D1138] hover:bg-purple-900/60 text-xs px-2.5 py-1 rounded-lg border border-purple-800/60 font-bold text-purple-200">R$ 50</button>
-                            <button onclick="setBet(100)" class="bg-[#1D1138] hover:bg-purple-900/60 text-xs px-2.5 py-1 rounded-lg border border-purple-800/60 font-bold text-purple-200">R$ 100</button>
+                            <button onclick="setBet(5)" class="bg-[#1D1138] hover:bg-purple-900/60 text-xs px-3 py-1.5 rounded-lg border border-purple-800/60 font-bold text-purple-200">R$ 5</button>
+                            <button onclick="setBet(10)" class="bg-[#1D1138] hover:bg-purple-900/60 text-xs px-3 py-1.5 rounded-lg border border-purple-800/60 font-bold text-purple-200">R$ 10</button>
+                            <button onclick="setBet(25)" class="bg-[#1D1138] hover:bg-purple-900/60 text-xs px-3 py-1.5 rounded-lg border border-purple-800/60 font-bold text-purple-200">R$ 25</button>
+                            <button onclick="setBet(50)" class="bg-[#1D1138] hover:bg-purple-900/60 text-xs px-3 py-1.5 rounded-lg border border-purple-800/60 font-bold text-purple-200">R$ 50</button>
+                            <button onclick="setBet(100)" class="bg-[#1D1138] hover:bg-purple-900/60 text-xs px-3 py-1.5 rounded-lg border border-purple-800/60 font-bold text-purple-200">R$ 100</button>
                         </div>
                     </div>
 
@@ -187,8 +179,8 @@
                         </button>
 
                         <!-- BOTÃO CASH OUT (EXIBIDO DURANTE A PARTIDA) -->
-                        <button id="cashout-btn" onclick="cashoutNinjaGame()" class="hidden flex-1 bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 hover:from-amber-300 hover:to-yellow-300 text-slate-950 font-black text-base md:text-lg py-3 rounded-xl shadow-xl shadow-amber-500/30 transition-all animate-pulse flex items-center justify-center gap-2">
-                            <i class="fa-solid fa-sack-dollar text-slate-950"></i> CASH OUT (<span id="cashout-btn-amount">R$ 25,00</span>)
+                        <button id="cashout-btn" onclick="cashoutNinjaGame()" disabled class="hidden flex-1 bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 hover:from-amber-300 hover:to-yellow-300 disabled:from-slate-600 disabled:via-slate-700 disabled:to-slate-600 disabled:text-slate-300 disabled:cursor-not-allowed text-slate-950 font-black text-base md:text-lg py-3 rounded-xl shadow-xl shadow-amber-500/30 transition-all animate-pulse flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-sack-dollar"></i> CASH OUT <span id="cashout-btn-amount">(bloqueado até 4,00x)</span>
                         </button>
                     </div>
                 </div>
@@ -259,7 +251,7 @@
         <div class="bg-[#120A24] border border-purple-800/60 rounded-3xl p-6 w-full max-w-md shadow-2xl relative">
             <button onclick="closeModal('deposit-modal')" class="absolute top-4 right-4 text-purple-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
             <h3 class="text-xl font-bold text-slate-100 mb-1 flex items-center gap-2"><i class="fa-solid fa-qrcode text-lime-400"></i> Depósito via PIX</h3>
-            <p class="text-xs text-purple-300/80 mb-4">Adicione saldo instantâneo à sua conta.</p>
+            <p class="text-xs text-lime-300/90 mb-4">🎁 Bônus de 100%: deposite R$ 20 e receba R$ 40. O bônus exige rollover de 5× antes do saque.</p>
             
             <div id="deposit-form-step">
                 <label class="text-xs text-purple-300 font-semibold mb-1 block">Valor do Depósito (R$)</label>
@@ -314,10 +306,10 @@
                     <input type="text" id="withdraw-pix-key" required placeholder="Sua chave PIX aqui" class="w-full bg-[#090514] border border-purple-900/80 rounded-xl px-4 py-2.5 text-sm focus:border-lime-400 outline-none">
                 </div>
                 <div>
-                    <label class="text-xs text-purple-300 font-semibold mb-1 block">Valor do Saque (Mínimo R$ 20,00)</label>
+                    <label class="text-xs text-purple-300 font-semibold mb-1 block">Valor do Saque (Mínimo R$ 150,00)</label>
                     <div class="relative">
                         <span class="absolute left-3 top-1/2 -translate-y-1/2 text-purple-400 font-bold text-sm">R$</span>
-                        <input type="number" id="withdraw-amount" min="20" step="1" required class="w-full bg-[#090514] border border-purple-900/80 rounded-xl pl-9 pr-4 py-2.5 font-bold text-lime-400 outline-none">
+                        <input type="number" id="withdraw-amount" min="150" step="1" required class="w-full bg-[#090514] border border-purple-900/80 rounded-xl pl-9 pr-4 py-2.5 font-bold text-lime-400 outline-none">
                     </div>
                 </div>
                 <button type="submit" class="mt-2 bg-gradient-to-r from-lime-400 to-emerald-500 font-black text-slate-950 text-sm py-3 rounded-xl shadow-lg shadow-lime-500/20 hover:scale-[1.02] active:scale-95 transition">
@@ -350,3 +342,10 @@
     <script src="/js/game.js"></script>
 </body>
 </html>
+                    <button onclick="openModal('deposit-modal')" class="bg-gradient-to-r from-lime-400 via-emerald-400 to-lime-500 hover:from-lime-300 hover:to-emerald-300 text-slate-950 font-black text-xs md:text-sm px-3.5 md:px-4 py-2 rounded-xl flex items-center gap-1.5 shadow-lg shadow-lime-500/25 transition-all hover:scale-105 active:scale-95">
+                        <i class="fa-solid fa-qrcode text-slate-950"></i> Depósito
+                    </button>
+                    <button onclick="openModal('withdraw-modal')" class="bg-[#1D1138] hover:bg-purple-900/40 text-slate-200 font-bold text-xs md:text-sm px-3 py-2 rounded-xl border border-purple-800/60 transition-all">
+                        <i class="fa-solid fa-money-bill-transfer text-lime-400"></i> Saque
+                    </button>
+
