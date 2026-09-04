@@ -1,6 +1,7 @@
 import os
 import sqlite3
 import hashlib
+import hmac
 import jwt
 import datetime
 import uuid
@@ -9,6 +10,8 @@ import io
 import base64
 import qrcode
 import urllib.request
+import urllib.error
+import urllib.parse
 import json
 from functools import wraps
 from flask import Flask, request, jsonify, send_from_directory
@@ -44,6 +47,9 @@ def init_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
+        transaction_columns = {row['name'] for row in cursor.execute("PRAGMA table_info(transactions)")}
+        if 'gateway_token' not in transaction_columns:
+            cursor.execute("ALTER TABLE transactions ADD COLUMN gateway_token TEXT")
         # Controle de rollover do bônus de depósito. ALTER é necessário para
         # instalações que já possuem a tabela users criada.
         user_columns = {row['name'] for row in cursor.execute("PRAGMA table_info(users)")}
@@ -91,6 +97,36 @@ TEST_MODE = False
 TEST_STARTING_CREDITS = 100.0
 DEPOSIT_BONUS_RATE = 1.0
 BONUS_ROLLOVER_MULTIPLIER = 5
+
+OMEGA_PAY_BASE_URL = os.environ.get('OMEGA_PAY_BASE_URL', 'https://app.omegapayments.com.br/api').rstrip('/')
+OMEGA_PAY_PUBLIC_KEY = os.environ.get('OMEGA_PAY_PUBLIC_KEY')
+OMEGA_PAY_SECRET_KEY = os.environ.get('OMEGA_PAY_SECRET_KEY')
+
+def omega_pay_ready():
+    return bool(OMEGA_PAY_PUBLIC_KEY and OMEGA_PAY_SECRET_KEY)
+
+def omega_pay_request(path, payload):
+    """Executa uma chamada autenticada à API da Omega Pay."""
+    url = urllib.parse.urljoin(f'{OMEGA_PAY_BASE_URL}/', path.lstrip('/'))
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode('utf-8'),
+        headers={
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'x-public-key': OMEGA_PAY_PUBLIC_KEY,
+            'x-secret-key': OMEGA_PAY_SECRET_KEY,
+        },
+        method='POST'
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=20) as response:
+            return json.loads(response.read().decode('utf-8'))
+    except urllib.error.HTTPError as error:
+        detail = error.read().decode('utf-8', errors='replace')
+        raise RuntimeError(f'Omega Pay respondeu {error.code}: {detail[:300]}') from error
+    except urllib.error.URLError as error:
+        raise RuntimeError('Não foi possível conectar à Omega Pay.') from error
 
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
@@ -218,6 +254,8 @@ def get_balance(current_user_id):
 def create_deposit(current_user_id):
     if TEST_MODE:
         return jsonify({'message': 'Depósitos estão desativados: esta é uma versão de teste com créditos fictícios.'}), 403
+    if not omega_pay_ready():
+        return jsonify({'message': 'A integração de pagamentos ainda não está configurada no servidor.'}), 503
     data = request.get_json() or {}
     try:
         amount = float(data.get('amount', 0))
@@ -227,55 +265,42 @@ def create_deposit(current_user_id):
     if amount < 5.0:
         return jsonify({'message': 'O valor mínimo para depósito via PIX é R$ 5,00.'}), 400
 
-    mp_access_token = os.environ.get('MERCADOPAGO_ACCESS_TOKEN')
-    
-    # Se houver chave do Mercado Pago configurada nas variáveis de ambiente
-    if mp_access_token:
-        try:
-            mp_url = "https://api.mercadopago.com/v1/payments"
-            mp_data = {
-                "transaction_amount": amount,
-                "description": "Deposito LuckyFruit Gaming",
-                "payment_method_id": "pix",
-                "payer": { "email": "pagador@luckyfruitgaming.com" }
-            }
-            req = urllib.request.Request(
-                mp_url,
-                data=json.dumps(mp_data).encode('utf-8'),
-                headers={
-                    "Authorization": f"Bearer {mp_access_token}",
-                    "Content-Type": "application/json"
-                }
-            )
-            with urllib.request.urlopen(req) as response:
-                res_data = json.loads(response.read().decode())
-                pix_copia_e_cola = res_data['point_of_interaction']['transaction_data']['qr_code']
-                qr_code_base64 = "data:image/png;base64," + res_data['point_of_interaction']['transaction_data']['qr_code_base64']
-                external_id = str(res_data['id'])
-        except Exception as e:
-            print("Erro ao integrar com Mercado Pago:", e)
-            mp_access_token = None
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT username, email FROM users WHERE id = ?", (current_user_id,))
+        user = cursor.fetchone()
+    if not user:
+        return jsonify({'message': 'Usuário não encontrado.'}), 404
 
-    # Fallback para o Motor de PIX Simulado de Produção/Teste
-    if not mp_access_token:
-        external_id = f"pix_{uuid.uuid4().hex[:12]}"
-        pix_copia_e_cola = f"00020126580014BR.GOV.BCB.PIX0136{uuid.uuid4()}5204000053039865405{amount:.2f}5802BR5916LUCKYFRUIT GAMING6009SAO PAULO62070503***6304ABCD"
+    identifier = f'luckyninja_{uuid.uuid4().hex}'
+    callback_url = os.environ.get('OMEGA_PAY_WEBHOOK_URL') or f'{request.url_root.rstrip("/")}/api/payments/webhook'
+    omega_payload = {
+        'identifier': identifier,
+        'amount': round(amount, 2),
+        'client': {'name': user['username'], 'email': user['email']},
+        'callbackUrl': callback_url,
+    }
+    try:
+        omega_data = omega_pay_request('/gateway/pix/receive', omega_payload)
+    except RuntimeError as error:
+        print('Erro ao criar cobrança Omega Pay:', error)
+        return jsonify({'message': 'Não foi possível gerar o PIX agora. Tente novamente em instantes.'}), 502
 
-        # Gerar imagem QR Code em Base64
-        qr = qrcode.QRCode(version=1, box_size=6, border=2)
-        qr.add_data(pix_copia_e_cola)
-        qr.make(fit=True)
-        img = qr.make_image(fill_color="black", back_color="white")
-        
-        buffered = io.BytesIO()
-        img.save(buffered, format="PNG")
-        qr_code_base64 = "data:image/png;base64," + base64.b64encode(buffered.getvalue()).decode('utf-8')
+    transaction_data = omega_data.get('transaction', omega_data)
+    pix_data = transaction_data.get('pix') or omega_data.get('pix') or {}
+    external_id = str(transaction_data.get('id') or omega_data.get('id') or '')
+    gateway_token = str(omega_data.get('token') or transaction_data.get('webhookToken') or '')
+    pix_copia_e_cola = pix_data.get('code') or pix_data.get('copyPaste') or pix_data.get('qrCode') or ''
+    qr_code_image = pix_data.get('image') or pix_data.get('qrCodeImage') or ''
+    if not external_id or not gateway_token or not pix_copia_e_cola:
+        print('Resposta incompleta da Omega Pay:', omega_data)
+        return jsonify({'message': 'A Omega Pay retornou uma cobrança incompleta. Tente novamente.'}), 502
 
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT INTO transactions (user_id, type, amount, status, pix_code, external_id) VALUES (?, ?, ?, ?, ?, ?)",
-            (current_user_id, 'deposit', amount, 'pending', pix_copia_e_cola, external_id)
+            "INSERT INTO transactions (user_id, type, amount, status, pix_code, external_id, gateway_token) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (current_user_id, 'deposit', amount, 'pending', pix_copia_e_cola, external_id, gateway_token)
         )
         conn.commit()
         tx_id = cursor.lastrowid
@@ -286,7 +311,7 @@ def create_deposit(current_user_id):
         'external_id': external_id,
         'amount': amount,
         'pix_code': pix_copia_e_cola,
-        'qr_code_image': qr_code_base64
+        'qr_code_image': qr_code_image
     })
 
 @app.route('/api/wallet/withdraw', methods=['POST'])
@@ -351,12 +376,31 @@ def transaction_history(current_user_id):
 
     return jsonify({'transactions': txs})
 
+@app.route('/api/payments/status/<external_id>', methods=['GET'])
+@token_required
+def payment_status(current_user_id, external_id):
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT status FROM transactions WHERE external_id = ? AND user_id = ? AND type = 'deposit'",
+            (external_id, current_user_id)
+        )
+        tx = cursor.fetchone()
+        if not tx:
+            return jsonify({'message': 'Transação não encontrada'}), 404
+        cursor.execute("SELECT balance FROM users WHERE id = ?", (current_user_id,))
+        user = cursor.fetchone()
+    return jsonify({'status': tx['status'], 'balance': user['balance'] if user else 0})
+
 # Webhook para Receber Notificação de Pagamento do Gateway (Simulado / Produção)
 @app.route('/api/payments/webhook', methods=['POST'])
 def payment_webhook():
     data = request.get_json() or {}
-    external_id = data.get('external_id') or str(data.get('id', ''))
-    status = data.get('status') or data.get('action', '')
+    transaction_data = data.get('transaction') or {}
+    external_id = str(transaction_data.get('id') or data.get('external_id') or data.get('id') or '')
+    event = data.get('event', '')
+    status = transaction_data.get('status') or data.get('status') or ''
+    received_token = str(data.get('token') or '')
 
     if not external_id:
         return jsonify({'message': 'ID de transação não informado'}), 400
@@ -372,7 +416,10 @@ def payment_webhook():
         if tx['status'] == 'completed':
             return jsonify({'message': 'Transação já foi creditada'}), 200
 
-        if status in ['approved', 'completed', 'paid', 'payment.updated']:
+        if not tx['gateway_token'] or not received_token or not hmac.compare_digest(tx['gateway_token'], received_token):
+            return jsonify({'message': 'Token do webhook inválido'}), 401
+
+        if event == 'TRANSACTION_PAID' and status == 'COMPLETED':
             bonus = round(tx['amount'] * DEPOSIT_BONUS_RATE, 2)
             rollover = round(bonus * BONUS_ROLLOVER_MULTIPLIER, 2)
             cursor.execute("UPDATE users SET balance = balance + ?, rollover_required = rollover_required + ? WHERE id = ?", (tx['amount'] + bonus, rollover, tx['user_id']))
@@ -381,41 +428,6 @@ def payment_webhook():
             return jsonify({'message': f'Pagamento aprovado: R$ {tx["amount"]:.2f} + R$ {bonus:.2f} de bônus creditados. Rollover: R$ {rollover:.2f}.'}), 200
 
     return jsonify({'message': 'Webhook recebido'}), 200
-
-# Botão de Teste no Frontend para Simular Pagamento Instantâneo do PIX
-@app.route('/api/payments/simulate-pay', methods=['POST'])
-@token_required
-def simulate_pay(current_user_id):
-    data = request.get_json() or {}
-    external_id = data.get('external_id')
-
-    with get_db() as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM transactions WHERE external_id = ? AND user_id = ?", (external_id, current_user_id))
-        tx = cursor.fetchone()
-
-        if not tx:
-            return jsonify({'message': 'Transação não encontrada!'}), 404
-
-        if tx['status'] == 'completed':
-            return jsonify({'message': 'Este PIX já foi pago anteriormente.'}), 400
-
-        # Creditar depósito + bônus de 100% e registrar rollover do bônus.
-        bonus = round(tx['amount'] * DEPOSIT_BONUS_RATE, 2)
-        rollover = round(bonus * BONUS_ROLLOVER_MULTIPLIER, 2)
-        cursor.execute("UPDATE users SET balance = balance + ?, rollover_required = rollover_required + ? WHERE id = ?", (tx['amount'] + bonus, rollover, current_user_id))
-        cursor.execute("UPDATE transactions SET status = 'completed' WHERE id = ?", (tx['id'],))
-        
-        cursor.execute("SELECT balance FROM users WHERE id = ?", (current_user_id,))
-        new_balance = cursor.fetchone()['balance']
-        conn.commit()
-
-        return jsonify({
-            'message': f'PIX de R$ {tx["amount"]:.2f} confirmado + R$ {bonus:.2f} de bônus! Rollover pendente: R$ {rollover:.2f}.',
-            'new_balance': new_balance,
-            'bonus': bonus,
-            'rollover_remaining': rollover
-        })
 
 # ----------------- MOTOR DO JOGO FRUIT NINJA APOSTAS -----------------
 
