@@ -562,6 +562,31 @@ def recent_wins():
         wins = [dict(row) for row in cursor.fetchall()]
     return jsonify({'recent_wins': wins})
 
+# A Vercel executa o Flask por meio de uma única função Python. Esta ponte
+# preserva as rotas públicas da API depois do rewrite definido em vercel.json.
+@app.route('/api/index', methods=['GET', 'POST'])
+def vercel_api_dispatch():
+    path = (request.args.get('path') or '').strip('/')
+    direct_routes = {
+        'auth/register': register,
+        'auth/login': login,
+        'auth/me': get_current_user,
+        'wallet/balance': get_balance,
+        'wallet/deposit': create_deposit,
+        'wallet/withdraw': request_withdraw,
+        'wallet/history': transaction_history,
+        'payments/webhook': payment_webhook,
+        'game/ninja/start': ninja_start,
+        'game/ninja/cashout': ninja_cashout,
+        'game/recent-wins': recent_wins,
+    }
+    if path.startswith('payments/status/') and request.method == 'GET':
+        return payment_status(path.rsplit('/', 1)[-1])
+    route = direct_routes.get(path)
+    if route:
+        return route()
+    return jsonify({'message': 'Rota da API não encontrada'}), 404
+
 # ----------------- SERVIR ARQUIVOS ESTÁTICOS NA VERCEL & LOCAL -----------------
 
 @app.route('/')
