@@ -262,8 +262,8 @@ def create_deposit(current_user_id):
     except (ValueError, TypeError):
         amount = 0
 
-    if amount < 5.0:
-        return jsonify({'message': 'O valor mínimo para depósito via PIX é R$ 5,00.'}), 400
+    if amount < 20.0:
+        return jsonify({'message': 'O valor mínimo para depósito via PIX é R$ 20,00.'}), 400
 
     with get_db() as conn:
         cursor = conn.cursor()
