@@ -284,7 +284,7 @@ def create_deposit(current_user_id):
         omega_data = omega_pay_request('/gateway/pix/receive', omega_payload)
     except RuntimeError as error:
         print('Erro ao criar cobrança Omega Pay:', error)
-        return jsonify({'message': 'Não foi possível gerar o PIX agora. Tente novamente em instantes.'}), 502
+        return jsonify({'message': f'A Omega Pay recusou a cobrança: {str(error)}'}), 502
 
     transaction_data = omega_data.get('transaction', omega_data)
     pix_data = transaction_data.get('pix') or omega_data.get('pix') or {}
