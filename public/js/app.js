@@ -149,6 +149,7 @@ async function generatePix() {
             document.getElementById('deposit-form-step').classList.add('hidden');
             document.getElementById('deposit-qr-step').classList.remove('hidden');
             showToast('PIX gerado! Faça o pagamento no seu banco.', 'success');
+            watchDepositConfirmation(activeDepositExternalId);
         } else {
             showToast(data.message, 'error');
         }
@@ -164,34 +165,30 @@ function copyPixCode() {
     showToast('Código PIX Copia e Cola copiado!', 'info');
 }
 
-async function simulatePixPayment() {
-    if (!activeDepositExternalId || !authToken) return;
-
-    try {
-        const res = await fetch('/api/payments/simulate-pay', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${authToken}`
-            },
-            body: JSON.stringify({ external_id: activeDepositExternalId })
-        });
-        const data = await res.json();
-
-        if (res.ok) {
-            updateBalanceDisplay(data.new_balance);
-            closeModal('deposit-modal');
-            showToast('✅ ' + data.message, 'success');
-            // Reset modal
-            document.getElementById('deposit-form-step').classList.remove('hidden');
-            document.getElementById('deposit-qr-step').classList.add('hidden');
-            activeDepositExternalId = null;
-        } else {
-            showToast(data.message, 'error');
+async function watchDepositConfirmation(externalId) {
+    const startedAt = Date.now();
+    const check = async () => {
+        if (!authToken || activeDepositExternalId !== externalId || Date.now() - startedAt > 15 * 60 * 1000) return;
+        try {
+            const res = await fetch(`/api/payments/status/${encodeURIComponent(externalId)}`, {
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            });
+            const data = await res.json();
+            if (res.ok && data.status === 'completed') {
+                updateBalanceDisplay(data.balance);
+                closeModal('deposit-modal');
+                document.getElementById('deposit-form-step').classList.remove('hidden');
+                document.getElementById('deposit-qr-step').classList.add('hidden');
+                activeDepositExternalId = null;
+                showToast('PIX confirmado e saldo atualizado!', 'success');
+                return;
+            }
+        } catch (_) {
+            // A próxima verificação tentará novamente.
         }
-    } catch (err) {
-        showToast('Erro ao simular pagamento.', 'error');
-    }
+        setTimeout(check, 5000);
+    };
+    setTimeout(check, 4000);
 }
 
 async function handleWithdraw(e) {
