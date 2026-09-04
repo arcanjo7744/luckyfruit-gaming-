@@ -289,16 +289,16 @@
             <p class="text-xs text-lime-300/90 mb-4">🎁 Bônus de 100%: deposite R$ 20 e receba R$ 40. O bônus exige rollover de 5× antes do saque.</p>
             
             <div id="deposit-form-step">
-                <label class="text-xs text-purple-300 font-semibold mb-1 block">Valor do Depósito (R$)</label>
+                <label class="text-xs text-purple-300 font-semibold mb-1 block">Valor do Depósito (mínimo R$ 20,00)</label>
                 <div class="grid grid-cols-4 gap-2 mb-3">
-                    <button onclick="setDepositAmount(10)" class="bg-[#090514] border border-purple-900/80 text-xs py-2 rounded-lg font-bold hover:border-lime-400 text-purple-200">R$ 10</button>
+                    <button onclick="setDepositAmount(20)" class="bg-[#090514] border border-purple-900/80 text-xs py-2 rounded-lg font-bold hover:border-lime-400 text-purple-200">R$ 20</button>
                     <button onclick="setDepositAmount(25)" class="bg-[#090514] border border-purple-900/80 text-xs py-2 rounded-lg font-bold hover:border-lime-400 text-purple-200">R$ 25</button>
                     <button onclick="setDepositAmount(50)" class="bg-[#090514] border border-purple-900/80 text-xs py-2 rounded-lg font-bold hover:border-lime-400 text-purple-200">R$ 50</button>
                     <button onclick="setDepositAmount(100)" class="bg-[#090514] border border-purple-900/80 text-xs py-2 rounded-lg font-bold hover:border-lime-400 text-purple-200">R$ 100</button>
                 </div>
                 <div class="relative mb-4">
                     <span class="absolute left-3 top-1/2 -translate-y-1/2 text-purple-400 font-bold text-sm">R$</span>
-                    <input type="number" id="deposit-amount" value="25.00" min="5" step="1" class="w-full bg-[#090514] border border-purple-900/80 rounded-xl pl-9 pr-4 py-2.5 font-bold text-lime-400 outline-none">
+                    <input type="number" id="deposit-amount" value="25.00" min="20" step="1" class="w-full bg-[#090514] border border-purple-900/80 rounded-xl pl-9 pr-4 py-2.5 font-bold text-lime-400 outline-none">
                 </div>
                 <button onclick="generatePix()" class="w-full bg-lime-400 hover:bg-lime-300 text-slate-950 font-black text-sm py-3 rounded-xl shadow-lg shadow-lime-500/20 transition">
                     Gerar QR Code PIX
