@@ -554,6 +554,10 @@ def recent_wins():
 
 @app.route('/')
 def index():
+    return send_from_directory(PUBLIC_DIR, 'landing.html')
+
+@app.route('/arena')
+def arena():
     return send_from_directory(PUBLIC_DIR, 'index.html')
 
 @app.route('/<path:path>')
